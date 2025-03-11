@@ -34,8 +34,8 @@ ENV PATH /usr/local/share/.config/yarn/global/node_modules/.bin:$PATH
 # Copy only the necessary files from the build stage
 COPY --from=build /app /app
 
-# Create a non-root user
-RUN adduser --disabled-password --gecos "" appuser
+# Create a non-root user if it doesn't already exist
+RUN id -u appuser &>/dev/null || adduser --disabled-password --gecos "" appuser
 
 # Change ownership of the app directory
 RUN chown -R appuser:appuser /app
@@ -43,8 +43,7 @@ RUN chown -R appuser:appuser /app
 # Expose the port the app runs on
 EXPOSE 3000
 
-# Create a non-root user and use it
-RUN useradd -m appuser
+# Use the non-root user
 USER appuser
 
 # Add pnpm to PATH for appuser
