@@ -34,7 +34,10 @@ ENV PATH /usr/local/share/.config/yarn/global/node_modules/.bin:$PATH
 # Copy only the necessary files from the build stage
 COPY --from=build /app /app
 
-# Change ownership of the app files to appuser
+# Create a non-root user
+RUN adduser --disabled-password --gecos "" appuser
+
+# Change ownership of the app directory
 RUN chown -R appuser:appuser /app
 
 # Expose the port the app runs on
