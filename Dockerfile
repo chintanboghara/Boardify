@@ -1,53 +1,23 @@
-# Use an official Node.js runtime as a parent image
-FROM node:18 AS build
-
-# Set the working directory inside the container
-WORKDIR /app
-
-# Copy dependency definitions
-COPY package.json pnpm-lock.yaml* ./
+# Use an official Node runtime as a parent image
+FROM node:18
 
 # Install pnpm globally
 RUN npm install -g pnpm
 
-# Install app dependencies
-RUN pnpm install
-
-# Copy the rest of your app's source code
-COPY . .
-
-# Build the app (if applicable)
-# RUN pnpm build
-
-# Use a smaller base image for the final stage
-FROM node:18-slim
-
-# Set the working directory inside the container
+# Set the working directory in the container
 WORKDIR /app
 
-# Install pnpm globally in the final stage
-RUN npm install -g pnpm
+# Copy package files and lock file to leverage Docker cache
+COPY package.json pnpm-lock.yaml ./
 
-# Add pnpm to PATH
-ENV PATH /usr/local/share/.config/yarn/global/node_modules/.bin:$PATH
+# Install project dependencies
+RUN pnpm install
 
-# Copy only the necessary files from the build stage
-COPY --from=build /app /app
+# Copy all project files into the container
+COPY . .
 
-# Create a non-root user if it doesn't already exist
-RUN id -u appuser &>/dev/null || adduser --disabled-password --gecos "" appuser
-
-# Change ownership of the app directory
-RUN chown -R appuser:appuser /app
-
-# Expose the port the app runs on
+# Expose the port on which the app runs
 EXPOSE 3000
 
-# Use the non-root user
-USER appuser
-
-# Add pnpm to PATH for appuser
-ENV PATH /usr/local/share/.config/yarn/global/node_modules/.bin:$PATH
-
-# Start the app
+# Start the development server
 CMD ["pnpm", "dev"]
