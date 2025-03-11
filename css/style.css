@@ -1,12 +1,26 @@
+/* Import Tailwind CSS utilities */
 @import 'tailwindcss';
 
+/* 
+  Define a custom "dark" variant that applies styles 
+  when an element or any of its children have the .dark class.
+*/
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Extend Tailwind with custom utility classes */
 @layer utilities {
+  /* 
+    In dark mode, invert the color of the date input's calendar picker indicator.
+    This helps maintain contrast and visibility in dark-themed interfaces.
+  */
   .dark input[type='date']::-webkit-calendar-picker-indicator {
     filter: invert(1);
   }
 
+  /* 
+    Custom scrollbar styling for elements with the "custom-scrollbar" class.
+    Applies to both Firefox and WebKit-based browsers.
+  */
   .custom-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: #888 transparent;
@@ -26,6 +40,10 @@
     border-radius: 4px;
   }
 
+  /* 
+    Horizontal scrollbar styling for elements with the "horizontal-scrollbar" class.
+    Enables horizontal scrolling with a minimal scrollbar design.
+  */
   .horizontal-scrollbar {
     overflow-x: auto;
     scrollbar-width: thin;
@@ -33,7 +51,7 @@
   }
 
   .horizontal-scrollbar::-webkit-scrollbar {
-    width: 0;
+    width: 0;  /* Hides vertical scrollbar */
     height: 2px;
   }
 
