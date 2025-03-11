@@ -1,5 +1,5 @@
 # Use an official Node runtime as a parent image
-FROM node:18
+FROM node:18-alpine
 
 # Install pnpm globally
 RUN npm install -g pnpm
@@ -16,8 +16,8 @@ RUN pnpm install
 # Copy all project files into the container
 COPY . .
 
-# Expose the port on which the app runs
-EXPOSE 3000
+# Expose the port on which the app runs (5173 as per Vite output)
+EXPOSE 5173
 
 # Start the development server
 CMD ["pnpm", "dev"]
