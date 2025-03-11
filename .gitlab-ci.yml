@@ -1,0 +1,36 @@
+image: docker:latest
+
+services:
+  - docker:dind
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: tcp://docker:2375
+
+stages:
+  - build
+  - push
+  - pull
+  - run
+
+build:
+  stage: build
+  script:
+    - docker build -t chintanboghara/boardify:latest .
+
+push:
+  stage: push
+  script:
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - docker push chintanboghara/boardify:latest
+
+pull:
+  stage: pull
+  script:
+    - docker pull chintanboghara/boardify:latest
+
+run:
+  stage: run
+  script:
+    - docker run --rm -d -p 5173:5173 chintanboghara/boardify:latest
