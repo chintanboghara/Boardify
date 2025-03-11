@@ -1,4 +1,4 @@
-
+[![Build, Push, Pull and Run Docker Image](https://github.com/chintanboghara/Boardify/actions/workflows/docker-cicd.yml/badge.svg)](https://github.com/chintanboghara/Boardify/actions/workflows/docker-cicd.yml)
 
 ## <a name="features">🔋 &nbsp; Features</a>
 
