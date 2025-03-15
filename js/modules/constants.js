@@ -1,9 +1,18 @@
+/**
+ * Default board configurations.
+ * Each board object includes a title and a color for styling.
+ */
 export const defaultBoards = [
-  {title: 'To Do', color: '#93c5fd'},
-  {title: 'In Progress', color: '#fcd34d'},
-  {title: 'Done', color: '#86efac'},
+  { title: 'To Do', color: '#93c5fd' },
+  { title: 'In Progress', color: '#fcd34d' },
+  { title: 'Done', color: '#86efac' },
 ];
 
+/**
+ * Default tasks for initializing the application.
+ * Each task contains details such as id, title, description, priority,
+ * due date, assignee, and the associated board column index.
+ */
 export const defaultTasks = [
   {
     id: 'default-1',
