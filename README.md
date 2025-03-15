@@ -61,7 +61,3 @@ Ensure you have the following installed on your machine:
    ```
 
 Visit [http://localhost:5173](http://localhost:5173) in your browser to access the app.
-
-## Docker CI/CD
-
-This project includes a Docker CI/CD workflow to automate build, push, pull, and run operations. Check out the badge above for the current status.
