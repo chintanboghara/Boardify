@@ -1,6 +1,6 @@
 # Boardify
 
-[![Build, Push, Pull and Run Docker Image](https://github.com/chintanboghara/Boardify/actions/workflows/docker-cicd.yml/badge.svg)](https://github.com/chintanboghara/Boardify/actions/workflows/docker-cicd.yml)
+[![Build and Push Docker Image](https://github.com/chintanboghara/Boardify/actions/workflows/docker-publish.yml/badge.svg?branch=main)](https://github.com/chintanboghara/Boardify/actions/workflows/docker-publish.yml)
 
 Boardify is a simple yet powerful Kanban board application for efficient task management. Organize your workflow with intuitive drag & drop, task prioritization, multiple board support, and a modern dark/light theme—all powered by local storage persistence.
 
