@@ -15,8 +15,6 @@ variables:
 stages:
   - build
   - push
-  - pull
-  - run
 
 # Build stage: Build the Docker image
 build:
@@ -33,17 +31,3 @@ push:
     - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
     - echo "Pushing Docker image..."
     - docker push chintanboghara/boardify:latest
-
-# Pull stage: Pull the image to verify it's available on Docker Hub
-pull:
-  stage: pull
-  script:
-    - echo "Pulling Docker image to verify push..."
-    - docker pull chintanboghara/boardify:latest
-
-# Run stage: Run the Docker container in detached mode
-run:
-  stage: run
-  script:
-    - echo "Running Docker container for Boardify..."
-    - docker run --rm -d -p 5173:5173 chintanboghara/boardify:latest
