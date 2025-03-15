@@ -1,73 +1,67 @@
+# Boardify
+
 [![Build, Push, Pull and Run Docker Image](https://github.com/chintanboghara/Boardify/actions/workflows/docker-cicd.yml/badge.svg)](https://github.com/chintanboghara/Boardify/actions/workflows/docker-cicd.yml)
 
-## <a name="features">🔋 &nbsp; Features</a>
+Boardify is a simple yet powerful Kanban board application for efficient task management. Organize your workflow with intuitive drag & drop, task prioritization, multiple board support, and a modern dark/light theme—all powered by local storage persistence.
 
-- Create Tasks
-  
-- Edit & Delete Tasks
-  
-- Drag & Drop
-  
-- Task Reordering
+## Features
 
-- Task Prioritization
-  
-- Search & Filter
-  
-- Multiple Board Support
+- **Create Tasks:** Add new tasks with detailed information.
+- **Edit & Delete Tasks:** Modify or remove tasks as needed.
+- **Drag & Drop:** Easily reorder tasks across boards.
+- **Task Reordering:** Change the order of tasks within boards.
+- **Task Prioritization:** Assign priorities to tasks for better organization.
+- **Search & Filter:** Quickly find tasks using the built-in search functionality.
+- **Multiple Board Support:** Manage several boards simultaneously.
+- **Dark/Light Theme:** Toggle between dark and light modes for comfortable viewing.
+- **Local Storage Persistence:** Your tasks are stored locally for quick access.
+- **Fully Responsive Design:** Enjoy a seamless experience on any device.
 
-- Dark/Light Theme
+## Tech Stack
 
-- Local Storage Persistence
+- [HTML5](https://developer.mozilla.org/en-US/docs/Web/HTML) – Structuring the application.
+- [Tailwind CSS](https://tailwindcss.com/) – Utility-first styling.
+- [JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript) – Core functionality.
+- [Git](https://git-scm.com/) – Version control.
 
-- Fully Responsive Design
+## Local Development
 
-<br>
+### Prerequisites
 
-## <a name="tech-stack">⚙️ &nbsp; Tech Stack</a>
+Ensure you have the following installed on your machine:
 
-- [HTML5](https://developer.mozilla.org/en-US/docs/Web/HTML) – structuring
-  
-- [Tailwind CSS](https://tailwindcss.com/) – utility-first styling
-  
-- [JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript) – functionality
-  
-- [Git](https://git-scm.com/) – version control
-<br>
+- [Git](https://git-scm.com/)
+- [Node.js](https://nodejs.org/en) (v20+)
+- [pnpm](https://pnpm.io/) (Package Manager)
 
-## <a name="local-development"> 🖥️&nbsp;&nbsp; Local Development</a>
+### Setup
 
-0.  **Prerequisites** <br>
-    Make sure you have the following installed on your machine:
+1. **Clone the repository:**
 
-    - [Git](https://git-scm.com/)
-  
-    - [Node.js](https://nodejs.org/en) (v20+)
-  
-    - [pnpm](https://pnpm.io/) (Package Manager)
+   ```bash
+   git clone https://github.com/chintanboghara/Boardify.git
+   ```
 
-1.  **Clone the repository:**
+2. **Navigate to the project directory:**
 
-    ```bash
-    git clone https://github.com/chintanboghara/Boardify.git
-    ```
+   ```bash
+   cd Boardify
+   ```
 
-2.  **Navigate to the project directory:**
+3. **Install dependencies:**
 
-    ```bash
-    cd Boardify
-    ```
+   ```bash
+   pnpm install
+   ```
 
-3.  **Install dependencies:**
+4. **Start the App:**
 
-    ```bash
-    pnpm install
-    ```
+   ```bash
+   pnpm dev
+   ```
 
-4.  **Start the App:**
+Visit [http://localhost:5173](http://localhost:5173) in your browser to access the app.
 
-    ```bash
-    pnpm dev
-    ```
+## Docker CI/CD
 
-    Visit &nbsp;[http://localhost:5173](http://localhost:5173)&nbsp; to access your app.
+This project includes a Docker CI/CD workflow to automate build, push, pull, and run operations. Check out the badge above for the current status.
