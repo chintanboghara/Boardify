@@ -70,4 +70,4 @@
     pnpm dev
     ```
 
-    Visit &nbsp;[http://localhost:3000](http://localhost:3000)&nbsp; to access your app.
+    Visit &nbsp;[http://localhost:5173](http://localhost:5173)&nbsp; to access your app.
