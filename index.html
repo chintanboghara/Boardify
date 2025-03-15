@@ -28,7 +28,6 @@
 
     <!-- Favicons Section -->
     <link rel="shortcut icon" href="./assets/favicon.svg" />
-
     <!-- Light mode favicon -->
     <link
       rel="icon"
@@ -36,7 +35,6 @@
       type="image/x-icon"
       media="(prefers-color-scheme: light)"
     />
-
     <!-- Dark mode favicon -->
     <link
       rel="icon"
@@ -64,10 +62,12 @@
   <body
     class="mx-auto flex min-h-[100dvh] max-w-[1440px] flex-col bg-white font-[Inter] transition-colors duration-300 dark:bg-[#121617]"
   >
+    <!-- Header and Navigation -->
     <header
       class="sticky top-0 left-0 z-50 w-full px-6 py-4 backdrop-blur-sm md:px-12"
     >
       <nav class="mx-auto flex flex-wrap items-center justify-between">
+        <!-- Logo Section -->
         <div class="flex items-center space-x-3">
           <svg
             class="size-6 text-gray-800 md:size-8 dark:text-white"
@@ -94,6 +94,7 @@
           </span>
         </div>
 
+        <!-- Search and Theme Toggle -->
         <div class="flex gap-2 md:gap-4">
           <div class="flex items-center space-x-4">
             <div class="relative hidden w-42 items-center sm:flex md:w-64">
@@ -109,11 +110,13 @@
             </div>
           </div>
 
+          <!-- Theme Toggle Button -->
           <button
             id="theme-toggle"
             aria-label="Toggle dark mode"
             class="ml-2 flex cursor-pointer items-center rounded-lg text-gray-800 transition-all duration-300 dark:text-gray-300"
           >
+            <!-- Sun Icon (hidden in dark mode) -->
             <svg
               id="sun-icon"
               class="hidden h-6 w-6 transform transition-transform duration-800"
@@ -142,12 +145,13 @@
                 </g>
               </g>
             </svg>
+            <!-- Moon Icon (visible in dark mode) -->
             <svg
               id="moon-icon"
               class="h-6 w-6 transform transition-transform duration-800"
               viewBox="-3 -1 36 36"
             >
-              <title>moon</title>
+              <title>Moon</title>
               <path
                 d="M10.895 7.574c0 7.55 5.179 13.67 11.567 13.67 1.588 0 3.101-0.38 4.479-1.063-1.695 4.46-5.996 7.636-11.051 7.636-6.533 0-11.83-5.297-11.83-11.83 0-4.82 2.888-8.959 7.023-10.803-0.116 0.778-0.188 1.573-0.188 2.39z"
               ></path>
@@ -157,7 +161,9 @@
       </nav>
     </header>
 
+    <!-- Main Content -->
     <main class="w-full flex-1 px-6 pt-4 md:px-12 md:pb-2">
+      <!-- Mobile Search Section -->
       <section class="relative mb-6 flex items-center space-x-4 sm:hidden">
         <i
           class="fas fa-search absolute left-3 text-xs text-gray-500 dark:text-gray-300"
@@ -170,9 +176,11 @@
         />
       </section>
 
+      <!-- Board Section -->
       <section
         class="board custom-scrollbar horizontal-scrollbar flex flex-nowrap gap-4 overflow-x-auto overflow-y-hidden pb-6 md:gap-6"
       >
+        <!-- To Do Board -->
         <div
           class="board-container flex min-h-[75dvh] max-w-[375px] min-w-[320px] flex-shrink-0 flex-col overflow-hidden rounded-lg bg-white shadow-md md:min-h-[80dvh] dark:bg-[#202227]"
         >
@@ -207,6 +215,7 @@
           </footer>
         </div>
 
+        <!-- In Progress Board -->
         <div
           class="board-container flex min-h-[75dvh] max-w-[375px] min-w-[320px] flex-shrink-0 flex-col overflow-hidden rounded-lg bg-white shadow-md md:min-h-[80dvh] dark:bg-[#202227]"
         >
@@ -231,7 +240,6 @@
           <section
             class="task-list flex-grow space-y-3 overflow-y-auto bg-gray-50 p-3 dark:bg-gray-700"
           ></section>
-
           <footer class="flex-shrink-0 p-4">
             <button
               class="add-task-btn flex w-full cursor-pointer items-center justify-center gap-2 text-gray-600 transition-opacity duration-200 ease-in-out hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-200"
@@ -242,6 +250,7 @@
           </footer>
         </div>
 
+        <!-- Done Board -->
         <div
           class="board-container flex min-h-[75dvh] max-w-[375px] min-w-[320px] flex-shrink-0 flex-col overflow-hidden rounded-lg bg-white shadow-md md:min-h-[80dvh] dark:bg-[#202227]"
         >
@@ -266,7 +275,6 @@
           <section
             class="task-list flex-grow space-y-3 overflow-y-auto bg-gray-50 p-3 dark:bg-gray-700"
           ></section>
-
           <footer class="flex-shrink-0 p-4">
             <button
               class="add-task-btn flex w-full cursor-pointer items-center justify-center gap-2 text-gray-600 transition-opacity duration-200 ease-in-out hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-200"
@@ -277,6 +285,7 @@
           </footer>
         </div>
 
+        <!-- Add New Board Button -->
         <button
           id="add-new-board-btn"
           class="flex min-w-[320px] flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-600 md:min-h-[80dvh] dark:border-gray-600 dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
@@ -287,6 +296,7 @@
       </section>
     </main>
 
+    <!-- Task Modal -->
     <div
       id="task-modal"
       class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4"
@@ -310,6 +320,7 @@
         </div>
         <div class="p-4">
           <form id="task-form">
+            <!-- Task Title -->
             <div class="mb-4">
               <label
                 for="task-title"
@@ -324,6 +335,7 @@
               />
             </div>
 
+            <!-- Task Description -->
             <div class="mb-4">
               <label
                 for="task-description"
@@ -337,6 +349,7 @@
               ></textarea>
             </div>
 
+            <!-- Task Priority -->
             <div class="mb-4">
               <label
                 for="task-priority"
@@ -371,6 +384,7 @@
               </div>
             </div>
 
+            <!-- Task Due Date -->
             <div class="mb-4">
               <label
                 for="task-due-date"
@@ -384,6 +398,7 @@
               />
             </div>
 
+            <!-- Task Assignee -->
             <div class="mb-4">
               <label
                 for="task-assignee"
@@ -397,6 +412,7 @@
               />
             </div>
 
+            <!-- Form Buttons -->
             <div class="mt-6 flex justify-end space-x-4">
               <button
                 type="button"
@@ -417,6 +433,7 @@
       </div>
     </div>
 
+    <!-- Edit Board Modal -->
     <div
       id="edit-board-modal"
       class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4"
@@ -437,6 +454,7 @@
         </div>
         <div class="p-4">
           <form id="edit-board-form">
+            <!-- Board Name Input -->
             <div class="mb-4">
               <label
                 class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
@@ -448,18 +466,19 @@
                 class="w-full rounded-md border bg-gray-50 px-3 py-2 text-gray-900 dark:border-gray-600 dark:bg-[#202227] dark:text-white"
               />
             </div>
+            <!-- Board Color Picker -->
             <div class="mb-4 flex items-center gap-4">
               <label
                 class="block text-sm font-medium text-gray-700 dark:text-gray-300"
                 >Board Color</label
               >
-
               <input
                 id="board-color-input"
                 type="color"
                 class="size-8 cursor-pointer appearance-none rounded-lg border-0 bg-transparent p-0"
               />
             </div>
+            <!-- Modal Action Buttons -->
             <div class="mt-6 flex items-center justify-between">
               <button
                 type="button"
@@ -489,6 +508,7 @@
       </div>
     </div>
 
+    <!-- Footer -->
     <footer class="flex w-full items-center justify-between p-6 md:px-12">
       <a
         href="https://github.com/chintanboghara/boardify"
@@ -509,6 +529,7 @@
       </a>
     </footer>
 
+    <!-- Main Script -->
     <script type="module" src="./js/script.js"></script>
   </body>
 </html>
