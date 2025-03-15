@@ -1,15 +1,21 @@
-// Main script to initialize the Boardify application.
-
 import Boardify from './broadify';
 
+// Wait for the DOM to fully load before initializing the Boardify app.
 document.addEventListener('DOMContentLoaded', () => {
-  // Instantiate Boardify and initialize the app
-  const app = new Boardify();
-  app.init();
+  try {
+    // Instantiate and initialize the Boardify application.
+    const app = new Boardify();
+    app.init();
 
-  // Listen for dragover events to enable auto-scrolling during drag operations
-  document.addEventListener('dragover', (event) => {
-    event.preventDefault();
-    app.autoScrollOnDrag(event);
-  });
+    // Enable auto-scrolling during drag operations.
+    document.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      // Ensure the autoScrollOnDrag method exists before calling it.
+      if (typeof app.autoScrollOnDrag === 'function') {
+        app.autoScrollOnDrag(event);
+      }
+    });
+  } catch (error) {
+    console.error("Failed to initialize Boardify app:", error);
+  }
 });
