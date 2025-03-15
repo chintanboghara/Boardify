@@ -33,17 +33,5 @@ pipeline {
                 sh 'docker push chintanboghara/boardify:latest'
             }
         }
-        stage('Pull') {
-            steps {
-                // Pull the image back to verify it was pushed correctly
-                sh 'docker pull chintanboghara/boardify:latest'
-            }
-        }
-        stage('Run') {
-            steps {
-                // Run the Docker container in detached mode mapping port 5173
-                sh 'docker run --rm -d -p 5173:5173 chintanboghara/boardify:latest'
-            }
-        }
     }
 }
