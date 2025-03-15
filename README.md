@@ -49,13 +49,13 @@
 1.  **Clone the repository:**
 
     ```bash
-    git clone https://github.com/chintanboghara/Boardable.git
+    git clone https://github.com/chintanboghara/Boardify.git
     ```
 
 2.  **Navigate to the project directory:**
 
     ```bash
-    cd Boardable
+    cd Boardify
     ```
 
 3.  **Install dependencies:**
