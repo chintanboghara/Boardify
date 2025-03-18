@@ -6,9 +6,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    # Map container port 5173 to host port 5173
+    # Map container port 80 to host port 5173
     ports:
-      - "5173:5173"
-    # Environment variables for the container
-    environment:
-      - NODE_ENV=development
+      - "5173:80"
