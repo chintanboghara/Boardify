@@ -27,3 +27,10 @@ Thumbs.db
 *.ntvs*
 *.njsproj
 *.sln
+
+# Terraform files
+*.tfvars
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
