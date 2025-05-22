@@ -5,7 +5,7 @@ import DragDropManager from './drag-drop-manager.js';
  * deletion, searching, rendering, and sorting of tasks.
  */
 class TaskManager {
-  constructor() {
+  constructor() { // uiManager will be set later via setUIManager
     // Load tasks from localStorage or initialize with an empty array.
     this.tasks = JSON.parse(localStorage.getItem('tasks')) || [];
     this.filteredTasks = [...this.tasks];
@@ -14,6 +14,15 @@ class TaskManager {
     this.taskForm = null;
     // Cache a single instance of DragDropManager for reuse.
     this.dragDropManager = null;
+    this.uiManager = null; // Placeholder for UIManager instance
+  }
+
+  /**
+   * Sets the UIManager instance.
+   * @param {Object} uiManager - The UIManager instance.
+   */
+  setUIManager(uiManager) {
+    this.uiManager = uiManager;
   }
 
   /**
@@ -34,11 +43,14 @@ class TaskManager {
   }
 
   /**
-   * Saves tasks to localStorage and re-renders all tasks.
+   * Saves tasks to localStorage and re-renders all tasks, then applies styling.
    */
   saveTasks() {
     localStorage.setItem('tasks', JSON.stringify(this.tasks));
     this.renderAllTasks();
+    if (this.uiManager && typeof this.uiManager.applyTaskStyling === 'function') {
+      this.uiManager.applyTaskStyling();
+    }
   }
 
   /**
@@ -200,6 +212,9 @@ class TaskManager {
         this.renderTask(task, taskLists[columnIndex]);
       }
     });
+    if (this.uiManager && typeof this.uiManager.applyTaskStyling === 'function') {
+      this.uiManager.applyTaskStyling();
+    }
   }
 
   /**
@@ -215,6 +230,9 @@ class TaskManager {
         this.renderTask(task, taskLists[columnIndex]);
       }
     });
+    if (this.uiManager && typeof this.uiManager.applyTaskStyling === 'function') {
+      this.uiManager.applyTaskStyling();
+    }
   }
 
   /**
@@ -245,6 +263,30 @@ class TaskManager {
     taskElement.id = `task-${task.id}`;
     taskElement.dataset.taskId = task.id;
     taskElement.draggable = true;
+
+    // Overdue task styling
+    let isOverdue = false;
+    const boardManager = window.boardManager; // Access boardManager globally for column titles
+
+    if (task.dueDate && boardManager) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Normalize today's date
+      const dueDate = new Date(task.dueDate);
+
+      const board = boardManager.boards[task.column];
+      const isDoneColumn = board && board.title.toLowerCase().includes('done');
+
+      if (dueDate < today && !isDoneColumn) {
+        isOverdue = true;
+        taskElement.classList.add('overdue-task'); // Add class for overdue tasks
+      }
+    }
+    
+    // Add a specific class if the task is overdue for styling
+    if (isOverdue) {
+      taskElement.classList.add('border-2', 'border-red-500');
+    }
+
     const priorityClass = this.getPriorityClass(task.priority);
     taskElement.innerHTML = `
       <div class="flex justify-between items-start mb-3">
@@ -256,9 +298,9 @@ class TaskManager {
       <p class="text-gray-600 dark:text-gray-400 text-sm break-words line-clamp-3 mb-4">
         ${task.description || 'No description'}
       </p>
-      ${task.dueDate ? `<p class="text-gray-600 dark:text-gray-400 text-sm">Due: ${task.dueDate}</p>` : ''}
+      ${task.dueDate ? `<p class="text-sm ${isOverdue ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'}">Due: ${new Date(task.dueDate).toLocaleDateString()}</p>` : ''}
       ${task.assignee ? `<p class="text-gray-600 dark:text-gray-400 break-words line-clamp-3 text-sm">Assignee: ${task.assignee}</p>` : ''}
-      <div class="flex justify-end space-x-2">
+      <div class="flex justify-end space-x-2 mt-auto pt-2">
         <button class="edit-task-btn p-2 text-gray-700 rounded-md transition-all hover:bg-white/20 dark:text-gray-300" data-task-id="${task.id}">
           <i class="fas fa-pencil-alt text-sm"></i>
         </button>
@@ -270,10 +312,12 @@ class TaskManager {
     targetColumn.appendChild(taskElement);
 
     // Initialize or reuse the DragDropManager instance.
-    const dragDropManager = this.dragDropManager || new DragDropManager(this);
+    // Ensure this.dragDropManager is initialized before calling methods on it.
     if (!this.dragDropManager) {
-      this.dragDropManager = dragDropManager;
+        this.dragDropManager = new DragDropManager(this);
     }
+    const dragDropManager = this.dragDropManager;
+
 
     // Attach drag and touch event listeners.
     taskElement.addEventListener('dragstart', e => {
@@ -283,20 +327,31 @@ class TaskManager {
     taskElement.addEventListener('touchstart', e => {
       const touchStartY = e.touches[0].clientY;
       const touchStartX = e.touches[0].clientX;
-      setTimeout(() => {
-        // If the movement is minimal, treat it as a drag start.
+      // Set a timeout to distinguish between a scroll and a drag start
+      const touchStartTimeout = setTimeout(() => {
+        // Check if the touch has moved significantly, if not, treat as drag start
         if (
+          taskElement.parentElement && // Ensure the element is still in the DOM
           Math.abs(e.touches[0].clientY - touchStartY) < 10 &&
           Math.abs(e.touches[0].clientX - touchStartX) < 10
         ) {
           dragDropManager.handleDragStart(e, taskElement);
         }
-      }, 200);
+      }, 200); // 200ms delay, adjust as needed
+
+      // Clear timeout if touch ends or moves significantly before timeout
+      taskElement.addEventListener('touchend', () => clearTimeout(touchStartTimeout), { once: true });
+      taskElement.addEventListener('touchmove', (moveEvent) => {
+        if (Math.abs(moveEvent.touches[0].clientY - touchStartY) > 10 || Math.abs(moveEvent.touches[0].clientX - touchStartX) > 10) {
+          clearTimeout(touchStartTimeout);
+        }
+      }, { once: true });
     });
+
 
     taskElement.addEventListener('touchmove', e => {
       if (taskElement.classList.contains('dragging')) {
-        e.preventDefault();
+        e.preventDefault(); // Prevent scrolling while dragging
         dragDropManager.handleTouchMove(e, taskElement);
       }
     });
@@ -309,20 +364,35 @@ class TaskManager {
         const column = elemBelow?.closest('.task-list');
         if (column) {
           const taskId = taskElement.dataset.taskId;
-          const taskIndex = this.tasks.findIndex(task => task.id === taskId);
+          const taskIndex = this.tasks.findIndex(t => t.id === taskId);
           if (taskIndex !== -1) {
             const newColumnIndex = Number.parseInt(column.dataset.index, 10);
-            this.tasks[taskIndex].column = newColumnIndex;
-            taskElement.remove();
-            column.appendChild(taskElement);
-            this.saveTasks();
+            if (this.tasks[taskIndex].column !== newColumnIndex) {
+              this.tasks[taskIndex].column = newColumnIndex;
+               // No need to manually move the element, renderAllTasks will handle it
+              this.saveTasks(); // This will re-render all tasks
+            } else {
+              // If the column hasn't changed, just ensure it's in the right place
+              column.appendChild(taskElement); // Or some other logic to ensure correct order
+              dragDropManager.handleDragEnd(taskElement); // Still call dragEnd
+            }
+          } else {
+             dragDropManager.handleDragEnd(taskElement); // Task not found, end drag
           }
+        } else {
+          // If not dropped on a valid column, end the drag operation
+          dragDropManager.handleDragEnd(taskElement);
         }
-        dragDropManager.handleDragEnd(taskElement);
+        // dragDropManager.handleDragEnd(taskElement); // Moved this call to be more conditional
       }
     });
 
     taskElement.addEventListener('dragend', () => {
+      // Note: dragDropManager.handleDragEnd(taskElement) is called inside touchend for touch,
+      // and should also be called here for mouse drag events.
+      // However, if saveTasks() which calls renderAllTasks() is used,
+      // the element might be removed and re-created.
+      // Ensure handleDragEnd can gracefully handle if taskElement is no longer in DOM or changed.
       dragDropManager.handleDragEnd(taskElement);
     });
 
@@ -343,28 +413,38 @@ class TaskManager {
    * @param {string} direction - Sort direction ('asc' or 'desc').
    */
   sortTasks(boardIndex, sortBy, direction) {
+    // Make sure boardManager is available if needed for sorting logic that depends on board properties
+    // const boardManager = window.boardManager; 
+
     const boardTasks = this.tasks.filter(task => task.column === boardIndex);
     boardTasks.sort((a, b) => {
       let comparison = 0;
       if (sortBy === 'priority') {
-        const priorityValues = { high: 3, medium: 2, low: 1 };
-        const priorityA = priorityValues[a.priority] || 0;
-        const priorityB = priorityValues[b.priority] || 0;
+        const priorityValues = { high: 3, medium: 2, low: 1 }; // Higher value means higher priority
+        const priorityA = priorityValues[a.priority.toLowerCase()] || 0;
+        const priorityB = priorityValues[b.priority.toLowerCase()] || 0;
         comparison = priorityA - priorityB;
       } else if (sortBy === 'dueDate') {
-        if (!a.dueDate && !b.dueDate) comparison = 0;
-        else if (!a.dueDate) comparison = direction === 'asc' ? 1 : -1;
-        else if (!b.dueDate) comparison = direction === 'asc' ? -1 : 1;
-        else comparison = new Date(a.dueDate) - new Date(b.dueDate);
+        const dateA = a.dueDate ? new Date(a.dueDate) : null;
+        const dateB = b.dueDate ? new Date(b.dueDate) : null;
+
+        if (!dateA && !dateB) comparison = 0;
+        else if (!dateA) comparison = 1; // Tasks without due dates go to the end
+        else if (!b.dueDate) comparison = -1; // Tasks without due dates go to the end
+        else comparison = dateA - dateB;
       } else if (sortBy === 'title') {
         comparison = a.title.localeCompare(b.title);
       }
       return direction === 'desc' ? -comparison : comparison;
     });
-    // Remove tasks from the board and append the sorted tasks.
-    this.tasks = this.tasks.filter(task => task.column !== boardIndex);
-    this.tasks = [...this.tasks, ...boardTasks];
-    this.saveTasks();
+    
+    // Replace existing tasks for the current board with the sorted ones
+    const otherBoardTasks = this.tasks.filter(task => task.column !== boardIndex);
+    this.tasks = [...otherBoardTasks, ...boardTasks];
+    // Ensure tasks maintain their original column index after sorting
+    // This is implicitly handled by filtering and spreading, but good to be mindful of.
+    
+    this.saveTasks(); // This will re-render the tasks in sorted order.
   }
 }
 
