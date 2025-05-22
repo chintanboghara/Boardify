@@ -1,13 +1,18 @@
 import DragDropManager from './drag-drop-manager.js';
 
+import { defaultTasks } from './constants'; // Import defaultTasks
+
 /**
  * Manages tasks for the Boardify application including creation, updating,
  * deletion, searching, rendering, and sorting of tasks.
  */
 class TaskManager {
-  constructor() { // uiManager will be set later via setUIManager
+  constructor(userId) { // Accept userId
+    this.userId = userId;
+    this.tasksKey = this.userId ? `tasks_${this.userId}` : 'tasks_guest'; // tasks_guest for null userId
+
     // Load tasks from localStorage or initialize with an empty array.
-    this.tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+    this.tasks = JSON.parse(localStorage.getItem(this.tasksKey)) || [];
     this.filteredTasks = [...this.tasks];
     this.editingTaskId = null;
     this.taskModal = null;
@@ -43,10 +48,42 @@ class TaskManager {
   }
 
   /**
-   * Saves tasks to localStorage and re-renders all tasks, then applies styling.
+   * Initializes default tasks for the current user if no tasks exist.
+   * This should be called when a new user is registered or when a guest session starts
+   * and no specific guest tasks are found.
+   */
+  initializeDefaultTasksForUser() {
+    if (localStorage.getItem(this.tasksKey) === null) {
+      // Only set default tasks if no tasks currently exist for this user/guest.
+      this.tasks = JSON.parse(JSON.stringify(defaultTasks)); // Deep copy to avoid modifying original defaults
+      // Ensure task columns are valid for default boards (0, 1, 2)
+      this.tasks.forEach(task => {
+        if (task.column === undefined || task.column < 0 || task.column > 2) {
+          task.column = 0; // Assign to the first board if column is invalid
+        }
+      });
+      this.saveTasks(); // Save these default tasks
+    } else if (this.tasks.length === 0 && (JSON.parse(localStorage.getItem(this.tasksKey)) || []).length === 0) {
+      // If current tasks in memory are empty AND localStorage is empty (or contains empty array string)
+      // This can happen if user clears all tasks for all boards.
+      // Consider if default tasks should be re-added here or if an empty state is preferred.
+      // For now, let's re-add default tasks if everything is empty.
+      // This behavior might need adjustment based on desired UX.
+      this.tasks = JSON.parse(JSON.stringify(defaultTasks));
+      this.tasks.forEach(task => {
+        if (task.column === undefined || task.column < 0 || task.column > 2) {
+          task.column = 0;
+        }
+      });
+      this.saveTasks();
+    }
+  }
+
+  /**
+   * Saves tasks to localStorage using the user-specific key and re-renders all tasks, then applies styling.
    */
   saveTasks() {
-    localStorage.setItem('tasks', JSON.stringify(this.tasks));
+    localStorage.setItem(this.tasksKey, JSON.stringify(this.tasks));
     this.renderAllTasks();
     if (this.uiManager && typeof this.uiManager.applyTaskStyling === 'function') {
       this.uiManager.applyTaskStyling();
