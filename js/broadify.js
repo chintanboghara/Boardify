@@ -13,11 +13,18 @@ class Boardify {
   constructor() {
     // Initialize application modules.
     this.boardManager = new BoardManager();
-    this.taskManager = new TaskManager();
+    this.taskManager = new TaskManager(); // TaskManager is created
     this.themeManager = new ThemeManager();
     this.dragDropManager = new DragDropManager(this.taskManager);
-    this.uiManager = new UIManager(this.boardManager, this.taskManager, this.dragDropManager);
+    // UIManager is created and gets taskManager
+    this.uiManager = new UIManager(this.boardManager, this.taskManager, this.dragDropManager); 
+    this.taskManager.setUIManager(this.uiManager); // Set uiManager instance in taskManager
+    this.boardManager.uiManager = this.uiManager; // Provide UIManager to BoardManager as well
     this.searchManager = new SearchManager(this.taskManager, this.uiManager);
+    
+    // Make boardManager globally available for modules that might need it (like TaskManager currently does)
+    // Consider refactoring to avoid global, but using it for now to match TaskManager's current state.
+    window.boardManager = this.boardManager; 
 
     // Create a placeholder element for task drag-and-drop interactions.
     this.taskPlaceholder = document.createElement('div');
@@ -40,6 +47,10 @@ class Boardify {
       this.attachGlobalEvents();
       this.searchManager.attachSearchEvents();
       this.boardManager.renderBoards(this.uiManager, this.taskManager, this.dragDropManager);
+      // After initial rendering, apply task styling.
+      if (this.uiManager && typeof this.uiManager.applyTaskStyling === 'function') {
+        this.uiManager.applyTaskStyling();
+      }
     } catch (error) {
       console.error('Error during Boardify initialization:', error);
     }

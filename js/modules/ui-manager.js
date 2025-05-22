@@ -151,6 +151,87 @@ class UIManager {
     const taskLists = document.querySelectorAll('.task-list');
     dragDropManager.setupDragAndDrop(taskLists);
   }
+
+  /**
+   * Applies styling to task cards, including due date display and overdue highlighting.
+   * This method should be called after tasks are rendered or updated.
+   */
+  applyTaskStyling() {
+    const taskElements = document.querySelectorAll('.task'); // Selector for task card elements
+    const tasksData = this.taskManager.getTasks(); // Get all task data
+
+    taskElements.forEach(taskElement => {
+      const taskId = taskElement.dataset.taskId;
+      const taskData = tasksData.find(t => t.id === taskId);
+
+      if (!taskData) {
+        return; // Skip if task data not found for this element
+      }
+
+      // --- Display Due Date ---
+      // Remove existing due date display to avoid duplication
+      const existingDueDateElement = taskElement.querySelector('.task-due-date-display');
+      if (existingDueDateElement) {
+        existingDueDateElement.remove();
+      }
+
+      if (taskData.dueDate) {
+        const dueDateElement = document.createElement('p');
+        dueDateElement.classList.add('text-sm', 'task-due-date-display'); // Add a class for easy selection
+        
+        const dueDate = new Date(taskData.dueDate);
+        // Adjust for timezone to display date as entered
+        const userTimezoneOffset = dueDate.getTimezoneOffset() * 60000;
+        const correctedDueDate = new Date(dueDate.getTime() + userTimezoneOffset);
+        
+        dueDateElement.textContent = `Due: ${correctedDueDate.toLocaleDateString()}`;
+        
+        // Insert due date before the action buttons div or as the last content item
+        const actionsDiv = taskElement.querySelector('.flex.justify-end.space-x-2');
+        if (actionsDiv) {
+          actionsDiv.parentNode.insertBefore(dueDateElement, actionsDiv);
+        } else {
+          taskElement.appendChild(dueDateElement); // Fallback if structure is different
+        }
+      }
+
+      // --- Highlight Overdue Tasks ---
+      let isOverdue = false;
+      if (taskData.dueDate && this.boardManager && this.boardManager.boards) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Normalize today's date
+
+        const dueDate = new Date(taskData.dueDate);
+         // Adjust for timezone to compare dates correctly
+        const userTimezoneOffset = dueDate.getTimezoneOffset() * 60000;
+        const correctedDueDate = new Date(dueDate.getTime() + userTimezoneOffset);
+
+
+        const board = this.boardManager.boards[taskData.column];
+        const isDoneColumn = board && board.title && board.title.toLowerCase().includes('done');
+
+        if (correctedDueDate < today && !isDoneColumn) {
+          isOverdue = true;
+        }
+      }
+
+      const dueDateDisplayElement = taskElement.querySelector('.task-due-date-display');
+
+      if (isOverdue) {
+        taskElement.classList.add('overdue-task-highlight', 'border-2', 'border-red-500');
+        if (dueDateDisplayElement) {
+          dueDateDisplayElement.classList.add('text-red-500', 'dark:text-red-400');
+          dueDateDisplayElement.classList.remove('text-gray-600', 'dark:text-gray-400');
+        }
+      } else {
+        taskElement.classList.remove('overdue-task-highlight', 'border-2', 'border-red-500');
+        if (dueDateDisplayElement) {
+          dueDateDisplayElement.classList.remove('text-red-500', 'dark:text-red-400');
+          dueDateDisplayElement.classList.add('text-gray-600', 'dark:text-gray-400');
+        }
+      }
+    });
+  }
 }
 
 export default UIManager;
