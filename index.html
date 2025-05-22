@@ -157,9 +157,169 @@
               ></path>
             </svg>
           </button>
+
+          <!-- Login/Sign Up Buttons -->
+          <button
+            id="login-btn"
+            class="ml-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            Login
+          </button>
+          <button
+            id="signup-btn"
+            class="ml-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+          >
+            Sign Up
+          </button>
+          <!-- User Display and Logout Button (Initially Hidden) -->
+          <div id="user-display" class="hidden items-center">
+            <span
+              id="user-info"
+              class="mr-2 text-sm text-gray-800 dark:text-gray-300"
+            ></span>
+            <button
+              id="logout-btn"
+              class="ml-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </nav>
     </header>
+
+    <!-- Login Modal -->
+    <div
+      id="login-modal"
+      class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4"
+    >
+      <div
+        class="w-full max-w-md overflow-hidden rounded-lg bg-white shadow-lg dark:bg-[#121617]"
+      >
+        <div
+          class="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700"
+        >
+          <h3 class="font-medium text-gray-900 dark:text-white">Login</h3>
+          <button
+            id="close-login-modal"
+            class="cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            &times;
+          </button>
+        </div>
+        <div class="p-4">
+          <form id="login-form">
+            <div class="mb-4">
+              <label
+                for="login-email"
+                class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >Email/Username</label
+              >
+              <input
+                type="text"
+                id="login-email"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-[#202227] dark:text-white dark:focus:ring-indigo-400"
+                required
+              />
+            </div>
+            <div class="mb-4">
+              <label
+                for="login-password"
+                class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >Password</label
+              >
+              <input
+                type="password"
+                id="login-password"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-[#202227] dark:text-white dark:focus:ring-indigo-400"
+                required
+              />
+            </div>
+            <div class="mt-6 flex justify-end">
+              <button
+                type="submit"
+                class="cursor-pointer rounded-md bg-indigo-600 px-4 py-2 text-white transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+              >
+                Login
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sign Up Modal -->
+    <div
+      id="signup-modal"
+      class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4"
+    >
+      <div
+        class="w-full max-w-md overflow-hidden rounded-lg bg-white shadow-lg dark:bg-[#121617]"
+      >
+        <div
+          class="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700"
+        >
+          <h3 class="font-medium text-gray-900 dark:text-white">Sign Up</h3>
+          <button
+            id="close-signup-modal"
+            class="cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            &times;
+          </button>
+        </div>
+        <div class="p-4">
+          <form id="signup-form">
+            <div class="mb-4">
+              <label
+                for="signup-email"
+                class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >Email/Username</label
+              >
+              <input
+                type="text"
+                id="signup-email"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-[#202227] dark:text-white dark:focus:ring-indigo-400"
+                required
+              />
+            </div>
+            <div class="mb-4">
+              <label
+                for="signup-password"
+                class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >Password</label
+              >
+              <input
+                type="password"
+                id="signup-password"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-[#202227] dark:text-white dark:focus:ring-indigo-400"
+                required
+              />
+            </div>
+            <div class="mb-4">
+              <label
+                for="signup-confirm-password"
+                class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >Confirm Password</label
+              >
+              <input
+                type="password"
+                id="signup-confirm-password"
+                class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-[#202227] dark:text-white dark:focus:ring-indigo-400"
+                required
+              />
+            </div>
+            <div class="mt-6 flex justify-end">
+              <button
+                type="submit"
+                class="cursor-pointer rounded-md bg-indigo-600 px-4 py-2 text-white transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+              >
+                Sign Up
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
 
     <!-- Main Content -->
     <main class="w-full flex-1 px-6 pt-4 md:px-12 md:pb-2">
