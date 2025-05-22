@@ -57,4 +57,13 @@
     background: #888;
     border-radius: 4px;
   }
+
+  /* Ensure modals are centered and above other content */
+  .fixed.inset-0.z-50.items-center.justify-center {
+    display: none; /* Hidden by default, shown by JS */
+  }
+
+  .fixed.inset-0.z-50.flex.items-center.justify-center {
+    /* Styles for when modal is shown */
+  }
 }
