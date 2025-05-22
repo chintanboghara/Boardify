@@ -4,9 +4,11 @@ import { defaultBoards, defaultTasks } from './constants';
  * Manages boards within the Boardify application.
  */
 class BoardManager {
-  constructor() {
+  constructor(userId) {
+    this.userId = userId;
+    this.boardsKey = this.userId ? `boards_${this.userId}` : 'boards_guest'; // boards_guest for null userId
     // Load boards from localStorage or use default boards if not present.
-    this.boards = JSON.parse(localStorage.getItem('boards')) || defaultBoards;
+    this.boards = JSON.parse(localStorage.getItem(this.boardsKey)) || defaultBoards;
     this.currentBoardIndex = null;
     this.boardsContainer = null;
     this.editBoardModal = null;
@@ -19,28 +21,51 @@ class BoardManager {
 
     // References to external managers.
     this.uiManager = null;
-    this.taskManager = null;
+    this.taskManager = null; // This will be set by Boardify class
     this.dragDropManager = null;
 
-    // Initialize localStorage data if boards are not already set.
-    if (!localStorage.getItem('boards')) {
-      this.saveBoards();
-      this.initializeDefaultTasks();
+    // Initialize localStorage data if boards are not already set for this user.
+    if (localStorage.getItem(this.boardsKey) === null) {
+      this.saveBoards(); // Save default boards for the new user
+      // Default tasks should be initialized by TaskManager for this user
+      // This will be handled when TaskManager is initialized with the userId
+      if (this.taskManager) {
+        this.taskManager.initializeDefaultTasksForUser();
+      } else {
+        // Fallback if taskManager is not yet initialized, though ideally it should be.
+        // This indicates a potential dependency issue if called before taskManager is ready.
+        // For now, we'll rely on TaskManager's own initialization.
+        console.warn('BoardManager: TaskManager not available during board initialization for default tasks. TaskManager should handle its own default task initialization.');
+      }
     }
   }
 
   /**
    * Initializes default tasks in localStorage.
+   * This method is now intended to be called by TaskManager or be part of TaskManager's own init.
+   * Kept here for reference during refactor, but should likely be removed or re-purposed.
+   * For now, it's best that TaskManager handles its own default task setup using its user-specific key.
    */
   initializeDefaultTasks() {
-    localStorage.setItem('tasks', JSON.stringify(defaultTasks));
+    // DEPRECATED in BoardManager: TaskManager should handle this.
+    // If this.taskManager is available (set after BoardManager instantiation),
+    // it can be called to set up its own default tasks.
+    if (this.taskManager) {
+      this.taskManager.initializeDefaultTasksForUser();
+    } else {
+      // This path should ideally not be hit if Boardify initializes managers correctly.
+      const tasksKey = this.userId ? `tasks_${this.userId}` : 'tasks_guest';
+      if (localStorage.getItem(tasksKey) === null) {
+        localStorage.setItem(tasksKey, JSON.stringify(defaultTasks));
+      }
+    }
   }
 
   /**
-   * Saves current boards to localStorage.
+   * Saves current boards to localStorage using the user-specific key.
    */
   saveBoards() {
-    localStorage.setItem('boards', JSON.stringify(this.boards));
+    localStorage.setItem(this.boardsKey, JSON.stringify(this.boards));
   }
 
   /**
