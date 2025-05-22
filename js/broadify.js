@@ -10,20 +10,36 @@ import UIManager from './modules/ui-manager.js';
  * Coordinates board, task, theme, drag & drop, UI, and search operations.
  */
 class Boardify {
-  constructor() {
-    // Initialize application modules.
-    this.boardManager = new BoardManager();
-    this.taskManager = new TaskManager(); // TaskManager is created
+  constructor(userId) { // Accept userId
+    this.userId = userId; // Store userId
+
+    // Initialize application modules, passing userId where needed.
+    this.boardManager = new BoardManager(this.userId);
+    this.taskManager = new TaskManager(this.userId); // TaskManager is created with userId
+    
+    // Now that taskManager is initialized with userId, ensure default tasks are set up.
+    // This is crucial for new users or guest sessions.
+    this.taskManager.initializeDefaultTasksForUser();
+
+    // BoardManager also needs a reference to taskManager to handle board deletions correctly (removing associated tasks).
+    // And TaskManager might need boardManager for context (like checking if a board is "Done").
+    // This creates a bit of a circular dependency in terms of initialization order if not handled carefully.
+    // For now, we ensure BoardManager gets taskManager after taskManager is fully initialized.
+    this.boardManager.taskManager = this.taskManager; 
+
+
     this.themeManager = new ThemeManager();
     this.dragDropManager = new DragDropManager(this.taskManager);
-    // UIManager is created and gets taskManager
+    // UIManager is created and gets taskManager and boardManager
     this.uiManager = new UIManager(this.boardManager, this.taskManager, this.dragDropManager); 
     this.taskManager.setUIManager(this.uiManager); // Set uiManager instance in taskManager
     this.boardManager.uiManager = this.uiManager; // Provide UIManager to BoardManager as well
     this.searchManager = new SearchManager(this.taskManager, this.uiManager);
     
-    // Make boardManager globally available for modules that might need it (like TaskManager currently does)
-    // Consider refactoring to avoid global, but using it for now to match TaskManager's current state.
+    // Make boardManager globally available. This helps with TaskManager's renderTask logic
+    // that currently uses window.boardManager. This should be refactored in the future
+    // to avoid global access, perhaps by passing boardManager instance or relevant board data
+    // to taskManager more directly when needed.
     window.boardManager = this.boardManager; 
 
     // Create a placeholder element for task drag-and-drop interactions.
