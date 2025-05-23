@@ -74,6 +74,12 @@ Ensure you have the following installed on your machine:
 5.  **Access the app:**
     Visit [http://localhost:5173](http://localhost:5173) in your browser.
 
+6.  **Run tests:**
+    To execute the automated tests, run:
+    ```bash
+    pnpm test
+    ```
+
 ### 2. Running with Docker Directly
 
 This method uses the pre-built Docker image available on GitHub Packages. It's a quick way to run the application without needing Node.js or pnpm installed locally.

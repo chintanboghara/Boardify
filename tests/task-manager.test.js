@@ -1,202 +1,390 @@
-// Simple Assertion Helper
-function assertEquals(expected, actual, message) {
-  if (expected !== actual) {
-    console.error(`Assertion Failed: ${message}`);
-    console.error(`  Expected: ${expected}`);
-    console.error(`  Actual:   ${actual}`);
-    // In a real test runner, you'd throw an error here
-    // throw new Error(`Assertion Failed: ${message}. Expected: ${expected}, Actual: ${actual}`);
-  } else {
-    console.log(`Assertion Passed: ${message}`);
-  }
-}
-
-function assertDeepEquals(expected, actual, message) {
-  if (JSON.stringify(expected) !== JSON.stringify(actual)) {
-    console.error(`Assertion Failed (deep): ${message}`);
-    console.error(`  Expected: ${JSON.stringify(expected)}`);
-    console.error(`  Actual:   ${JSON.stringify(actual)}`);
-  } else {
-    console.log(`Assertion Passed (deep): ${message}`);
-  }
-}
-
-// Mocks
-const mockLocalStorage = (() => {
-  let store = {};
-  return {
-    getItem(key) {
-      return store[key] || null;
-    },
-    setItem(key, value) {
-      store[key] = value.toString();
-    },
-    clear() {
-      store = {};
-    },
-    removeItem(key) {
-      delete store[key];
-    }
-  };
-})();
-
-// Assign mock to global window object for TaskManager to pick up
-global.localStorage = mockLocalStorage;
-// Mock for document needed by TaskManager's openTaskModal, handleTaskFormSubmit, etc.
-// For the focused tests, these might not be strictly necessary if not called.
-global.document = {
-  getElementById: (id) => {
-    console.log(`Mock document.getElementById called with ${id}`);
-    // Return a mock element with a value property if needed by the code path
-    return { 
-      value: '', 
-      reset: () => {}, 
-      dataset: {}, 
-      querySelector: () => ({ textContent: ''}) ,
-      classList: { add: () => {}, remove: () => {} }
-    };
-  },
-  querySelectorAll: (selector) => {
-    console.log(`Mock document.querySelectorAll called with ${selector}`);
-    return []; // Return an empty array or mock elements as needed
-  }
-};
-global.confirm = () => true; // Mock confirm for deleteTask
-
-// Mock UIManager
-const mockUIManager = {
-  applyTaskStyling: () => {
-    // console.log("Mock UIManager.applyTaskStyling called");
-  }
-};
+import TaskManager from '../js/modules/task-manager.js';
+// Import DragDropManager to allow Jest to mock it.
+// We don't use this import directly in the test, but Jest needs it for mocking the module.
+import DragDropManager from '../js/modules/drag-drop-manager.js';
 
 // Mock DragDropManager
-class MockDragDropManager {
-  constructor(taskManager) {
-    // console.log("MockDragDropManager instantiated");
-    this.taskManager = taskManager;
-  }
-  handleDragStart() {}
-  handleTouchMove() {}
-  handleDragEnd() {}
-  setupDragAndDrop() {}
-}
+// This mocks the module, so when TaskManager internally does `new DragDropManager()`,
+// it gets this mocked version.
+jest.mock('../js/modules/drag-drop-manager.js', () => {
+  return jest.fn().mockImplementation(() => {
+    return {
+      handleDragStart: jest.fn(),
+      handleTouchMove: jest.fn(),
+      handleDragEnd: jest.fn(),
+      setupDragAndDrop: jest.fn(), // Include if TaskManager calls this
+    };
+  });
+});
 
-// Dynamically import TaskManager AFTER mocks are set up
-let TaskManager;
+// localStorage mock
+const localStorageMock = (() => {
+  let store = {};
+  return {
+    getItem: jest.fn((key) => store[key] || null),
+    setItem: jest.fn((key, value) => { store[key] = value.toString(); }),
+    clear: jest.fn(() => { store = {}; }),
+    removeItem: jest.fn((key) => { delete store[key]; }),
+  };
+})();
+Object.defineProperty(global, 'localStorage', { value: localStorageMock });
 
-async function runTests() {
-  try {
-    const taskManagerModule = await import('../js/modules/task-manager.js');
-    TaskManager = taskManagerModule.default;
+// document mock
+global.document = {
+  getElementById: jest.fn((id) => ({
+    value: '',
+    reset: jest.fn(),
+    dataset: {},
+    querySelector: jest.fn(() => ({ textContent: '' })),
+    classList: { add: jest.fn(), remove: jest.fn() }
+  })),
+  querySelectorAll: jest.fn(() => []), // Mock querySelectorAll to return an empty array
+  // Add other document properties/methods if needed by the code under test
+};
 
-    if (!TaskManager) {
-      console.error("Failed to import TaskManager!");
-      return;
-    }
+// confirm mock
+global.confirm = jest.fn(() => true); // Default to true (e.g., for deleteTask)
 
-    console.log("TaskManager imported successfully.");
+describe('TaskManager', () => {
+  let taskManager;
+  let mockUIManager;
 
-    // --- Test Suite ---
-    console.log("--- Running TaskManager Due Date Tests ---");
-
-    // Test 1: Adding a task with a due date
-    mockLocalStorage.clear();
-    let tm1 = new TaskManager();
-    tm1.setUIManager(mockUIManager); // Set the mock UIManager
-    tm1.dragDropManager = new MockDragDropManager(tm1); // Manually set mock DragDropManager
+  beforeEach(() => {
+    // Clear all instances and calls to constructor and all methods:
+    localStorageMock.clear();
+    localStorageMock.getItem.mockClear();
+    localStorageMock.setItem.mockClear();
+    localStorageMock.removeItem.mockClear();
     
-    const dueDate1 = '2023-12-31';
-    tm1.addTask('Test Task 1', 'Description 1', 'high', dueDate1, 'Assignee 1', 0);
-    let tasks1 = tm1.getTasks();
-    assertEquals(1, tasks1.length, "Test 1.1: Number of tasks after adding one");
-    assertEquals(dueDate1, tasks1[0].dueDate, "Test 1.2: Due date of added task");
+    document.getElementById.mockClear();
+    document.querySelectorAll.mockClear();
+    // If getElementById returns objects with methods, clear them too if necessary
+    // e.g., if a specific element's reset method was called:
+    // document.getElementById('task-form').reset.mockClear(); // but this needs careful handling of return values
 
-    // Test 2: Adding a task without a due date (should default to empty or null)
-    mockLocalStorage.clear();
-    let tm2 = new TaskManager();
-    tm2.setUIManager(mockUIManager);
-    tm2.dragDropManager = new MockDragDropManager(tm2);
+    global.confirm.mockClear();
 
-    tm2.addTask('Test Task 2', 'Description 2', 'medium', '', 'Assignee 2', 0); // Empty string for due date
-    let tasks2 = tm2.getTasks();
-    assertEquals(1, tasks2.length, "Test 2.1: Number of tasks after adding one without due date");
-    assertEquals('', tasks2[0].dueDate, "Test 2.2: Due date should be empty string for task without due date");
+    // Create a fresh UIManager mock for each test
+    mockUIManager = {
+      applyTaskStyling: jest.fn(),
+      // Mock other UIManager methods if TaskManager calls them
+    };
 
-    tm2.addTask('Test Task 3', 'Description 3', 'low', null, 'Assignee 3', 1); // null for due date
-    tasks2 = tm2.getTasks();
-    assertEquals(2, tasks2.length, "Test 2.3: Number of tasks after adding another without due date (null)");
-    assertEquals(null, tasks2[1].dueDate, "Test 2.4: Due date should be null for task with null due date");
+    taskManager = new TaskManager('testUser1'); // Using a consistent userId for tests
+    taskManager.setUIManager(mockUIManager);
+    // TaskManager will instantiate its own DragDropManager, which will be the mocked version
+    // due to jest.mock() at the top of the file.
+    // No need to manually assign taskManager.dragDropManager if the module mock works as expected.
+  });
 
+  describe('Due Date Functionality', () => {
+    it('Test 1.1: should have 1 task after adding one', () => {
+      const dueDate1 = '2023-12-31';
+      taskManager.addTask('Test Task 1', 'Description 1', 'high', dueDate1, 'Assignee 1', 0);
+      const tasks = taskManager.getTasks();
+      expect(tasks.length).toBe(1);
+    });
 
-    // Test 3: Updating a task's due date
-    mockLocalStorage.clear();
-    let tm3 = new TaskManager();
-    tm3.setUIManager(mockUIManager);
-    tm3.dragDropManager = new MockDragDropManager(tm3);
+    it('Test 1.2: should set the due date correctly for the added task', () => {
+      const dueDate1 = '2023-12-31';
+      taskManager.addTask('Test Task 1', 'Description 1', 'high', dueDate1, 'Assignee 1', 0);
+      const tasks = taskManager.getTasks();
+      expect(tasks[0].dueDate).toBe(dueDate1);
+    });
 
-    tm3.addTask('Test Task 4', 'Description 4', 'high', '2023-01-01', 'Assignee 4', 0);
-    let tasks3 = tm3.getTasks();
-    const taskId3 = tasks3[0].id;
-    const newDueDate3 = '2024-01-15';
-    tm3.updateTask(taskId3, 'Updated Title 4', 'Updated Desc 4', 'low', newDueDate3, 'New Assignee 4');
-    tasks3 = tm3.getTasks();
-    assertEquals(newDueDate3, tasks3[0].dueDate, "Test 3.1: Due date after update");
-    assertEquals('Updated Title 4', tasks3[0].title, "Test 3.2: Title after update (verifying other fields not broken)");
+    it('Test 2.1: should have 1 task after adding one without due date', () => {
+      taskManager.addTask('Test Task 2', 'Description 2', 'medium', '', 'Assignee 2', 0); // Empty string for due date
+      const tasks = taskManager.getTasks();
+      expect(tasks.length).toBe(1);
+    });
 
-    // Test 4: Retrieving tasks and verifying due date field
-    mockLocalStorage.clear();
-    let tm4 = new TaskManager();
-    tm4.setUIManager(mockUIManager);
-    tm4.dragDropManager = new MockDragDropManager(tm4);
+    it('Test 2.2: should have an empty string for due date if added with empty string', () => {
+      taskManager.addTask('Test Task 2', 'Description 2', 'medium', '', 'Assignee 2', 0);
+      const tasks = taskManager.getTasks();
+      expect(tasks[0].dueDate).toBe('');
+    });
 
-    const taskData4_1 = { title: 'Retrieve Task 1', dueDate: '2025-02-20', column: 0, priority: 'high', description: '', assignee: '' };
-    const taskData4_2 = { title: 'Retrieve Task 2', dueDate: '', column: 0, priority: 'low', description: '', assignee: '' };
-    tm4.addTask(taskData4_1.title, taskData4_1.description, taskData4_1.priority, taskData4_1.dueDate, taskData4_1.assignee, taskData4_1.column);
-    tm4.addTask(taskData4_2.title, taskData4_2.description, taskData4_2.priority, taskData4_2.dueDate, taskData4_2.assignee, taskData4_2.column);
+    it('Test 2.3: should have 2 tasks after adding another with null due date', () => {
+      taskManager.addTask('Test Task 2', 'Description 2', 'medium', '', 'Assignee 2', 0);
+      taskManager.addTask('Test Task 3', 'Description 3', 'low', null, 'Assignee 3', 1); // null for due date
+      const tasks = taskManager.getTasks();
+      expect(tasks.length).toBe(2);
+    });
     
-    let retrievedTasks4 = tm4.getTasks();
-    assertEquals(2, retrievedTasks4.length, "Test 4.1: Correct number of tasks retrieved");
-    assertEquals(taskData4_1.dueDate, retrievedTasks4.find(t => t.title === taskData4_1.title).dueDate, "Test 4.2: Due date of first retrieved task");
-    assertEquals(taskData4_2.dueDate, retrievedTasks4.find(t => t.title === taskData4_2.title).dueDate, "Test 4.3: Due date of second retrieved task (empty)");
+    it('Test 2.4: should have null for due date if added with null', () => {
+      taskManager.addTask('Test Task 3', 'Description 3', 'low', null, 'Assignee 3', 1);
+      const tasks = taskManager.getTasks();
+      // The original test expected null, ensure this is the behavior.
+      // Depending on how TaskManager handles it, it might convert null to '' or store as null.
+      // Based on original test: assertEquals(null, tasks2[1].dueDate, ...);
+      expect(tasks[0].dueDate).toBe(null); 
+    });
 
-    console.log("--- TaskManager Due Date Tests Finished ---");
+    it('Test 3.1: should update the due date of an existing task', () => {
+      taskManager.addTask('Test Task 4', 'Description 4', 'high', '2023-01-01', 'Assignee 4', 0);
+      let tasks = taskManager.getTasks();
+      const taskId = tasks[0].id;
+      const newDueDate = '2024-01-15';
+      taskManager.updateTask(taskId, 'Updated Title 4', 'Updated Desc 4', 'low', newDueDate, 'New Assignee 4');
+      tasks = taskManager.getTasks();
+      expect(tasks[0].dueDate).toBe(newDueDate);
+    });
 
-  } catch (e) {
-    console.error("Error during test execution:", e);
-  }
-}
+    it('Test 3.2: should update other fields when updating due date', () => {
+      taskManager.addTask('Test Task 4', 'Description 4', 'high', '2023-01-01', 'Assignee 4', 0);
+      let tasks = taskManager.getTasks();
+      const taskId = tasks[0].id;
+      const newTitle = 'Updated Title 4';
+      taskManager.updateTask(taskId, newTitle, 'Updated Desc 4', 'low', '2024-01-15', 'New Assignee 4');
+      tasks = taskManager.getTasks();
+      expect(tasks[0].title).toBe(newTitle);
+    });
 
-// Run the tests
-runTests();
+    it('Test 4.1: should retrieve the correct number of tasks', () => {
+      const taskData1 = { title: 'Retrieve Task 1', dueDate: '2025-02-20', column: 0, priority: 'high', description: '', assignee: '' };
+      const taskData2 = { title: 'Retrieve Task 2', dueDate: '', column: 0, priority: 'low', description: '', assignee: '' };
+      taskManager.addTask(taskData1.title, taskData1.description, taskData1.priority, taskData1.dueDate, taskData1.assignee, taskData1.column);
+      taskManager.addTask(taskData2.title, taskData2.description, taskData2.priority, taskData2.dueDate, taskData2.assignee, taskData2.column);
+      
+      const retrievedTasks = taskManager.getTasks();
+      expect(retrievedTasks.length).toBe(2);
+    });
 
-// Note: This is a very basic test setup. A real testing framework (Jest, Mocha, etc.)
-// would provide better structure, assertions, cleanup, and reporting.
-// The dynamic import is used to ensure mocks are in place before TaskManager module loads.
-// In a proper ES module test environment (like with Jest), imports are usually at the top.
-// The 'global' object is used here for simplicity to mimic browser globals in a Node-like environment if these tests were run by Node.
-// If run in a browser, 'window' would be the global object.
-// The DragDropManager is also mocked because renderAllTasks (called by saveTasks) instantiates it.
-// By providing a basic mock, we prevent errors if it's newed up.
-// The tests focus on the data aspects of dueDate, avoiding calls to DOM-heavy methods like openTaskModal.
-// saveTasks calls renderAllTasks, which calls renderTask, which does try to create DragDropManager.
-// So, ensuring tm.dragDropManager is pre-assigned a mock helps.
-// Also, tm.setUIManager(mockUIManager) is crucial as renderAllTasks calls uiManager.applyTaskStyling.
+    it('Test 4.2: should retrieve the correct due date for the first task', () => {
+      const taskData1 = { title: 'Retrieve Task 1', dueDate: '2025-02-20', column: 0, priority: 'high', description: '', assignee: '' };
+      taskManager.addTask(taskData1.title, taskData1.description, taskData1.priority, taskData1.dueDate, taskData1.assignee, taskData1.column);
+      const retrievedTasks = taskManager.getTasks();
+      const foundTask = retrievedTasks.find(t => t.title === taskData1.title);
+      expect(foundTask.dueDate).toBe(taskData1.dueDate);
+    });
+    
+    it('Test 4.3: should retrieve the correct (empty) due date for the second task', () => {
+      const taskData2 = { title: 'Retrieve Task 2', dueDate: '', column: 0, priority: 'low', description: '', assignee: '' };
+      taskManager.addTask(taskData2.title, taskData2.description, taskData2.priority, taskData2.dueDate, taskData2.assignee, taskData2.column);
+      const retrievedTasks = taskManager.getTasks();
+      const foundTask = retrievedTasks.find(t => t.title === taskData2.title);
+      expect(foundTask.dueDate).toBe(taskData2.dueDate);
+    });
+  });
 
-console.log("Test file created. Attempting to run tests...");
-console.log("If TaskManager uses 'import DragDropManager from ...', the mock class MockDragDropManager defined here won't be used by it directly unless the module system is manipulated, which is beyond simple JS tests.");
-console.log("The dynamic import of TaskManager is a trick for this environment. For robust testing, a proper test runner that handles ES modules and mocking (like Jest) is recommended.");
-console.log("The current test mock DragDropManager by manually assigning to `this.dragDropManager` which TaskManager checks before creating a new one. This should work for these tests.");
+  describe('General Task Management', () => {
+    it('should add a task and save it to localStorage', () => {
+      taskManager.addTask('New Task', 'Desc', 'low', '', 'User', 0);
+      expect(localStorageMock.setItem).toHaveBeenCalled();
+      // Check if it was called with the user-specific key
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(expect.stringContaining('testUser1'), expect.any(String));
+      const tasks = JSON.parse(localStorageMock.getItem(taskManager.tasksKey));
+      expect(tasks.length).toBe(1);
+      expect(tasks[0].title).toBe('New Task');
+    });
 
-// A more robust way to mock DragDropManager if it were imported by TaskManager:
-// This would require a test runner that supports module mocking (e.g., Jest's jest.mock)
-// jest.mock('../js/modules/drag-drop-manager.js', () => {
-//   return {
-//     __esModule: true, // This is important for ES modules
-//     default: class MockDragDropManager {
-//       constructor() { console.log("Mocked DragDropManager constructor"); }
-//       setupDragAndDrop() { console.log("Mocked setupDragAndDrop"); }
-//       // Add other methods that might be called
-//     }
-//   };
-// });
+    it('should delete a task after confirmation', () => {
+      global.confirm.mockReturnValueOnce(true); // Ensure confirm returns true for this specific test
+      taskManager.addTask('Task to Delete', 'Desc', 'medium', '', 'User', 0);
+      let tasks = taskManager.getTasks();
+      const taskId = tasks[0].id;
+      
+      taskManager.deleteTask(taskId);
+      tasks = taskManager.getTasks();
+      expect(tasks.length).toBe(0);
+      expect(localStorageMock.setItem).toHaveBeenCalledTimes(2); // Once for add, once for delete
+    });
+
+    it('should not delete a task if confirmation is false', () => {
+      global.confirm.mockReturnValueOnce(false); // Ensure confirm returns false
+      taskManager.addTask('Task to Keep', 'Desc', 'medium', '', 'User', 0);
+      let tasks = taskManager.getTasks();
+      const taskId = tasks[0].id;
+
+      taskManager.deleteTask(taskId);
+      tasks = taskManager.getTasks();
+      expect(tasks.length).toBe(1);
+      expect(localStorageMock.setItem).toHaveBeenCalledTimes(1); // Only for add
+    });
+
+    it('should call UIManager.applyTaskStyling when saving tasks', () => {
+      taskManager.addTask('Style Test Task', 'Desc', 'low', '', 'User', 0);
+      // saveTasks is called by addTask
+      expect(mockUIManager.applyTaskStyling).toHaveBeenCalled();
+    });
+
+    it('should initialize with default tasks if no tasks exist for the user', () => {
+        localStorageMock.getItem.mockReturnValueOnce(null); // Simulate no tasks for user
+        const tm = new TaskManager('newUserWithDefaults');
+        tm.setUIManager(mockUIManager); // Set UIManager
+        tm.initializeDefaultTasksForUser(); // Call the method that loads defaults
+        
+        const tasks = tm.getTasks();
+        // Assuming defaultTasks is not empty
+        expect(tasks.length).toBeGreaterThan(0); 
+        // Check if default tasks were saved
+        expect(localStorageMock.setItem).toHaveBeenCalledWith(`tasks_newUserWithDefaults`, JSON.stringify(tasks));
+    });
+
+    it('should use guest key if userId is null', () => {
+        const guestTaskManager = new TaskManager(null); // Pass null for userId
+        guestTaskManager.setUIManager(mockUIManager);
+        guestTaskManager.addTask('Guest Task', 'Desc', 'low', '', '', 0);
+        expect(localStorageMock.setItem).toHaveBeenCalledWith('tasks_guest', expect.any(String));
+    });
+
+    // Add more tests for searchTasks, renderFilteredTasks, sortTasks etc.
+    // For render-heavy methods, you might only check if they call other services correctly
+    // or if they manipulate the tasks array as expected, rather than asserting DOM changes.
+  });
+
+  // You might want a separate describe block for methods that heavily interact with the DOM
+  // and require more detailed document.getElementById or querySelectorAll mocking.
+  describe('DOM Interaction (Modal and Form)', () => {
+    let mockTaskForm;
+    let mockTaskModal;
+
+    beforeEach(() => {
+        mockTaskForm = {
+            value: '',
+            reset: jest.fn(),
+            dataset: {}, // dataset.targetColumn will be set here
+            // querySelector: jest.fn(() => ({ textContent: '' })) // Not needed if h3 is on modal
+        };
+        mockTaskModal = {
+            classList: { add: jest.fn(), remove: jest.fn() },
+            querySelector: jest.fn(() => ({ textContent: '' })) // For the h3
+        };
+
+        // Specific mocks for elements interacted with by modal methods
+        document.getElementById.mockImplementation((id) => {
+            if (id === 'task-modal') return mockTaskModal;
+            if (id === 'task-form') return mockTaskForm;
+            if (id === 'task-title') return { value: '' };
+            if (id === 'task-description') return { value: '' };
+            if (id === 'task-priority') return { value: 'low' };
+            if (id === 'task-due-date') return { value: '' };
+            if (id === 'task-assignee') return { value: '' };
+            return null; 
+        });
+    });
+
+    it('openTaskModal should show modal and populate for editing if task is provided', () => {
+        const taskToEdit = { id: '1', title: 'Edit Me', description: 'My Desc', priority: 'high', dueDate: '2024-05-05', assignee: 'Dev' };
+        taskManager.openTaskModal(0, taskToEdit);
+
+        expect(document.getElementById).toHaveBeenCalledWith('task-modal');
+        expect(mockTaskModal.classList.remove).toHaveBeenCalledWith('hidden');
+        expect(mockTaskModal.classList.add).toHaveBeenCalledWith('flex');
+        expect(mockTaskForm.dataset.targetColumn).toBe(0);
+        expect(document.getElementById('task-title').value).toBe(taskToEdit.title); // Check if values are set
+        expect(mockTaskModal.querySelector).toHaveBeenCalledWith('h3');
+        // expect(mockTaskModal.querySelector().textContent).toBe('Edit Task'); // This requires the mock to return an object with textContent
+    });
+
+    it('openTaskModal should show modal and reset form if no task is provided (new task)', () => {
+        taskManager.openTaskModal(1); // Open for new task in column 1
+
+        expect(mockTaskModal.classList.remove).toHaveBeenCalledWith('hidden');
+        expect(mockTaskModal.classList.add).toHaveBeenCalledWith('flex');
+        expect(mockTaskForm.dataset.targetColumn).toBe(1);
+        expect(mockTaskForm.reset).toHaveBeenCalled();
+        // expect(mockTaskModal.querySelector().textContent).toBe('Add New Task');
+    });
+    
+    it('hideTaskModal should hide the modal', () => {
+        // First, ensure the modal is "open" (mocks are set up by openTaskModal)
+        taskManager.openTaskModal(0);
+        mockTaskModal.classList.remove.mockClear(); // Clear previous calls from openTaskModal
+        mockTaskModal.classList.add.mockClear();
+
+        taskManager.hideTaskModal();
+        expect(mockTaskModal.classList.add).toHaveBeenCalledWith('hidden');
+        expect(mockTaskModal.classList.remove).toHaveBeenCalledWith('flex');
+    });
+
+    it('handleTaskFormSubmit should add a new task if editingTaskId is null', () => {
+        // Setup for adding a new task
+        document.getElementById.mockImplementation(id => { // More refined mock for this test
+            if (id === 'task-modal') return mockTaskModal;
+            if (id === 'task-form') return { ...mockTaskForm, dataset: { targetColumn: '0' } }; // Ensure targetColumn is set
+            if (id === 'task-title') return { value: 'New Form Task' };
+            if (id === 'task-description') return { value: 'Form Desc' };
+            if (id === 'task-priority') return { value: 'medium' };
+            if (id === 'task-due-date') return { value: '2024-10-10' };
+            if (id === 'task-assignee') return { value: 'Form User' };
+            return null;
+        });
+        
+        taskManager.openTaskModal(0); // This sets editingTaskId to null
+        taskManager.handleTaskFormSubmit();
+
+        const tasks = taskManager.getTasks();
+        expect(tasks.length).toBe(1);
+        expect(tasks[0].title).toBe('New Form Task');
+        expect(tasks[0].column).toBe(0);
+        expect(mockTaskModal.classList.add).toHaveBeenCalledWith('hidden'); // Modal hidden after submit
+    });
+
+    it('handleTaskFormSubmit should update an existing task if editingTaskId is set', () => {
+        // Add a task first to be "edited"
+        taskManager.addTask('Original Task', 'Orig Desc', 'high', '', '', 0);
+        const taskToEdit = taskManager.getTasks()[0];
+
+        document.getElementById.mockImplementation(id => {
+            if (id === 'task-modal') return mockTaskModal;
+            if (id === 'task-form') return { ...mockTaskForm, dataset: { targetColumn: taskToEdit.column.toString() } };
+            if (id === 'task-title') return { value: 'Updated Form Task' };
+            if (id === 'task-description') return { value: 'Updated Desc' };
+            if (id === 'task-priority') return { value: 'low' };
+            if (id === 'task-due-date') return { value: '2024-11-11' };
+            if (id === 'task-assignee') return { value: 'Updated User' };
+            return null;
+        });
+
+        taskManager.openTaskModal(taskToEdit.column, taskToEdit); // This sets editingTaskId
+        taskManager.handleTaskFormSubmit();
+
+        const tasks = taskManager.getTasks();
+        expect(tasks.length).toBe(1);
+        expect(tasks[0].id).toBe(taskToEdit.id);
+        expect(tasks[0].title).toBe('Updated Form Task');
+        expect(tasks[0].priority).toBe('low');
+        expect(mockTaskModal.classList.add).toHaveBeenCalledWith('hidden');
+    });
+
+     it('handleTaskFormSubmit should alert if title is empty', () => {
+        global.alert = jest.fn(); // Mock alert
+
+        document.getElementById.mockImplementation(id => {
+            if (id === 'task-modal') return mockTaskModal;
+            if (id === 'task-form') return { ...mockTaskForm, dataset: { targetColumn: '0' } };
+            if (id === 'task-title') return { value: '' }; // Empty title
+            // ... other fields can be valid
+            if (id === 'task-description') return { value: 'Form Desc' };
+            if (id === 'task-priority') return { value: 'medium' };
+            if (id === 'task-due-date') return { value: '2024-10-10' };
+            if (id === 'task-assignee') return { value: 'Form User' };
+            return null;
+        });
+        
+        taskManager.openTaskModal(0);
+        taskManager.handleTaskFormSubmit();
+
+        expect(global.alert).toHaveBeenCalledWith('Task title cannot be empty.');
+        expect(taskManager.getTasks().length).toBe(0); // No task should be added
+        expect(mockTaskModal.classList.add).not.toHaveBeenCalledWith('hidden'); // Modal should remain open
+
+        global.alert.mockRestore(); // Clean up alert mock
+    });
+  });
+});
+
+// Note: For renderTask and other DOM-heavy methods, you'd typically check:
+// 1. If the correct data is passed to DOM element creation.
+// 2. If event listeners are attached (can be tricky, often requires more specific mocking of addEventListener on the created elements).
+// 3. If other services (like DragDropManager, UIManager) are called correctly.
+// Testing the exact DOM output (innerHTML) can be brittle.
+// The `renderAllTasks` and `renderFilteredTasks` call `renderTask` for each task.
+// They also clear the task lists (document.querySelectorAll('.task-list').forEach(list => list.innerHTML = '')).
+// The mock `document.querySelectorAll` returns an empty array, so this part won't cause errors.
+// The `renderTask` method itself creates elements and appends them.
+// The current `document.querySelectorAll` mock will prevent errors there.
+// If actual DOM structure needs to be verified, a more complex setup like JSDOM or testing in a browser environment would be needed.
+// The mock for DragDropManager ensures that `new DragDropManager(this)` inside renderTask gets a mock.
+// The mock for UIManager ensures `this.uiManager.applyTaskStyling()` runs without error.
