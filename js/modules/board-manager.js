@@ -120,6 +120,9 @@ class BoardManager {
               </h3>
             </div>
             <div class="flex items-center space-x-2">
+              <button class="sort-by-due-date-btn cursor-pointer rounded p-1 text-gray-700 transition-colors hover:bg-white/20 dark:text-gray-800 dark:hover:bg-gray-700/20" data-board-index="${index}" aria-label="Sort by Due Date">
+                <i class="fas fa-calendar-alt text-sm"></i>
+              </button>
               <button class="plus-btn cursor-pointer text-gray-700 dark:text-gray-200 hover:bg-white/20 dark:hover:bg-gray-700/20 p-1 rounded transition-colors" data-index="${index}">
                 <i class="fas fa-plus text-sm"></i>
               </button>

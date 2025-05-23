@@ -76,6 +76,38 @@ class UIManager {
         this.taskManager.handleTaskFormSubmit();
       });
     }
+
+    // Event listener for sort by due date buttons
+    const boardContainer = document.querySelector('.board');
+    if (boardContainer) {
+      boardContainer.addEventListener('click', event => {
+        const sortButton = event.target.closest('.sort-by-due-date-btn');
+        if (sortButton) {
+          const boardIndex = parseInt(sortButton.dataset.boardIndex, 10);
+          let currentSortDirection = sortButton.dataset.sortDirection;
+          let newSortDirection;
+
+          if (currentSortDirection === 'asc') {
+            newSortDirection = 'desc';
+          } else if (currentSortDirection === 'desc') {
+            newSortDirection = 'asc'; // Cycle back to asc after desc
+          } else { // Undefined or any other value
+            newSortDirection = 'asc';
+          }
+
+          this.taskManager.sortTasks(boardIndex, 'dueDate', newSortDirection);
+          sortButton.dataset.sortDirection = newSortDirection;
+
+          const icon = sortButton.querySelector('i');
+          icon.classList.remove('fa-calendar-alt', 'fa-sort-amount-up', 'fa-sort-amount-down');
+          if (newSortDirection === 'asc') {
+            icon.classList.add('fa-sort-amount-up');
+          } else {
+            icon.classList.add('fa-sort-amount-down');
+          }
+        }
+      });
+    }
   }
 
   /**
