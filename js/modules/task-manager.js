@@ -301,27 +301,56 @@ class TaskManager {
     taskElement.dataset.taskId = task.id;
     taskElement.draggable = true;
 
-    // Overdue task styling
-    let isOverdue = false;
+    // Due date styling
+    let isOverdue = false; // This will determine the text color of the due date
     const boardManager = window.boardManager; // Access boardManager globally for column titles
+
+    // Remove any existing due date styling classes first to handle updates correctly
+    taskElement.classList.remove(
+      'overdue-task', 
+      'due-today', 
+      'due-soon', 
+      'border-red-500', 
+      'border-blue-500', 
+      'border-yellow-500',
+      'border-2' // Remove border-2 as well, it will be re-added if needed
+    );
 
     if (task.dueDate && boardManager) {
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Normalize today's date
+
       const dueDate = new Date(task.dueDate);
+      dueDate.setHours(0, 0, 0, 0); // Normalize due date
+
+      const timeDiff = dueDate.getTime() - today.getTime();
+      const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
 
       const board = boardManager.boards[task.column];
       const isDoneColumn = board && board.title.toLowerCase().includes('done');
 
-      if (dueDate < today && !isDoneColumn) {
-        isOverdue = true;
-        taskElement.classList.add('overdue-task'); // Add class for overdue tasks
+      if (!isDoneColumn) {
+        if (dayDiff < 0) { // Overdue
+          taskElement.classList.add('overdue-task', 'border-2', 'border-red-500');
+          isOverdue = true;
+        } else if (dayDiff === 0) { // Due today
+          taskElement.classList.add('due-today', 'border-2', 'border-blue-500');
+          isOverdue = false; 
+        } else if (dayDiff > 0 && dayDiff <= 3) { // Due soon
+          taskElement.classList.add('due-soon', 'border-2', 'border-yellow-500');
+          isOverdue = false;
+        } else {
+          // Not overdue, not due today, not due soon (or no specific state)
+          isOverdue = false;
+          // No border classes needed here as they were cleared
+        }
+      } else {
+        // Task is in a "Done" column, not considered for these visual cues
+        isOverdue = false;
       }
-    }
-    
-    // Add a specific class if the task is overdue for styling
-    if (isOverdue) {
-      taskElement.classList.add('border-2', 'border-red-500');
+    } else {
+      // No due date or boardManager not available
+      isOverdue = false;
     }
 
     const priorityClass = this.getPriorityClass(task.priority);
