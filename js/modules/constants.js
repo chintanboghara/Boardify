@@ -22,6 +22,10 @@ export const defaultTasks = [
     dueDate: '2025-02-20',
     assignee: 'Alex',
     column: 0,
+    subtasks: [
+      { id: 'sub-default-1-1', title: 'Identify key stakeholders', completed: true },
+      { id: 'sub-default-1-2', title: 'Define success metrics', completed: false }
+    ]
   },
   {
     id: 'default-2',
@@ -49,6 +53,10 @@ export const defaultTasks = [
     dueDate: '2025-02-18',
     assignee: 'Taylor',
     column: 1,
+    subtasks: [
+      { id: 'sub-default-4-1', title: 'Sketch wireframes', completed: false },
+      { id: 'sub-default-4-2', title: 'Choose color palette', completed: false }
+    ]
   },
   {
     id: 'default-5',
