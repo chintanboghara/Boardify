@@ -373,6 +373,118 @@ describe('TaskManager', () => {
         global.alert.mockRestore(); // Clean up alert mock
     });
   });
+
+  describe('Task Priority and Sorting', () => {
+    it('should save priority correctly when adding a task', () => {
+      taskManager.addTask('Priority Task 1', 'Desc', 'high', '', 'User', 0);
+      const tasks = taskManager.getTasks();
+      expect(tasks[0].priority).toBe('high');
+    });
+
+    it('should update priority correctly when updating a task', () => {
+      taskManager.addTask('Priority Task 2', 'Desc', 'low', '', 'User', 0);
+      let tasks = taskManager.getTasks();
+      const taskId = tasks[0].id;
+      taskManager.updateTask(taskId, 'Updated Priority Task 2', 'Updated Desc', 'high', '', 'User');
+      tasks = taskManager.getTasks();
+      expect(tasks[0].priority).toBe('high');
+    });
+
+    it('getPriorityClass should return correct class for "high"', () => {
+      expect(taskManager.getPriorityClass('high')).toBe('bg-rose-300 dark:bg-rose-500 text-gray-800 dark:text-white');
+    });
+
+    it('getPriorityClass should return correct class for "medium"', () => {
+      expect(taskManager.getPriorityClass('medium')).toBe('bg-amber-300 dark:bg-amber-500 text-gray-800 dark:text-white');
+    });
+
+    it('getPriorityClass should return correct class for "low"', () => {
+      expect(taskManager.getPriorityClass('low')).toBe('bg-green-300 dark:bg-green-500 text-gray-800 dark:text-white');
+    });
+
+    it('getPriorityClass should return default class for unknown priority', () => {
+      expect(taskManager.getPriorityClass('unknown')).toBe('bg-green-300 dark:bg-green-500 text-gray-800 dark:text-white'); // Default is low
+    });
+
+    describe('sortTasks by priority', () => {
+      beforeEach(() => {
+        // Clear tasks before each sort test to ensure a clean slate
+        taskManager.tasks = []; 
+        taskManager.saveTasks(); 
+      });
+
+      it('should sort tasks by priority in descending order', () => {
+        taskManager.addTask('Task A Low', 'Desc', 'low', '', 'User', 0);
+        taskManager.addTask('Task B High', 'Desc', 'high', '', 'User', 0);
+        taskManager.addTask('Task C Medium', 'Desc', 'medium', '', 'User', 0);
+        
+        taskManager.sortTasks(0, 'priority', 'desc');
+        const tasks = taskManager.getTasks().filter(t => t.column === 0);
+        
+        expect(tasks.length).toBe(3);
+        expect(tasks[0].title).toBe('Task B High'); // High
+        expect(tasks[1].title).toBe('Task C Medium'); // Medium
+        expect(tasks[2].title).toBe('Task A Low'); // Low
+      });
+
+      it('should sort tasks by priority in ascending order', () => {
+        taskManager.addTask('Task A Low', 'Desc', 'low', '', 'User', 0);
+        taskManager.addTask('Task B High', 'Desc', 'high', '', 'User', 0);
+        taskManager.addTask('Task C Medium', 'Desc', 'medium', '', 'User', 0);
+
+        taskManager.sortTasks(0, 'priority', 'asc');
+        const tasks = taskManager.getTasks().filter(t => t.column === 0);
+
+        expect(tasks.length).toBe(3);
+        expect(tasks[0].title).toBe('Task A Low'); // Low
+        expect(tasks[1].title).toBe('Task C Medium'); // Medium
+        expect(tasks[2].title).toBe('Task B High'); // High
+      });
+
+      it('should group tasks with the same priority together', () => {
+        taskManager.addTask('Task A Low', 'Desc', 'low', '', 'User', 0);
+        taskManager.addTask('Task B High', 'Desc', 'high', '', 'User', 0);
+        taskManager.addTask('Task C Medium 1', 'Desc', 'medium', '', 'User', 0);
+        taskManager.addTask('Task D Medium 2', 'Desc', 'medium', '', 'User', 0);
+        taskManager.addTask('Task E High 2', 'Desc', 'high', '', 'User', 0);
+
+        taskManager.sortTasks(0, 'priority', 'desc');
+        const tasks = taskManager.getTasks().filter(t => t.column === 0);
+
+        expect(tasks.length).toBe(5);
+        expect(tasks[0].priority).toBe('high');
+        expect(tasks[1].priority).toBe('high');
+        expect(tasks[2].priority).toBe('medium');
+        expect(tasks[3].priority).toBe('medium');
+        expect(tasks[4].priority).toBe('low');
+      });
+
+      it('should only sort tasks in the specified boardIndex', () => {
+        // Tasks in column 0
+        taskManager.addTask('C0 Task A Low', 'Desc', 'low', '', 'User', 0);
+        taskManager.addTask('C0 Task B High', 'Desc', 'high', '', 'User', 0);
+        // Tasks in column 1 (should remain unsorted by priority call on column 0)
+        taskManager.addTask('C1 Task X High', 'Desc', 'high', '', 'User', 1); // Will be first if tasks are just appended
+        taskManager.addTask('C1 Task Y Low', 'Desc', 'low', '', 'User', 1);  // Will be second
+        
+        const initialTasksCol1 = taskManager.getTasks().filter(t => t.column === 1).map(t => t.title);
+
+        taskManager.sortTasks(0, 'priority', 'desc');
+        
+        const tasksCol0 = taskManager.getTasks().filter(t => t.column === 0);
+        const tasksCol1 = taskManager.getTasks().filter(t => t.column === 1).map(t => t.title);
+
+        expect(tasksCol0.length).toBe(2);
+        expect(tasksCol0[0].title).toBe('C0 Task B High');
+        expect(tasksCol0[1].title).toBe('C0 Task A Low');
+
+        expect(tasksCol1.length).toBe(2);
+        // Check that order in column 1 is preserved
+        expect(tasksCol1[0]).toBe(initialTasksCol1[0]); 
+        expect(tasksCol1[1]).toBe(initialTasksCol1[1]);
+      });
+    });
+  });
 });
 
 // Note: For renderTask and other DOM-heavy methods, you'd typically check:
