@@ -106,6 +106,31 @@ class UIManager {
             icon.classList.add('fa-sort-amount-down');
           }
         }
+
+        // Event listener for sort by priority buttons
+        const sortPriorityButton = event.target.closest('.sort-by-priority-btn');
+        if (sortPriorityButton) {
+          const boardIndex = parseInt(sortPriorityButton.dataset.boardIndex, 10);
+          let currentSortDirection = sortPriorityButton.dataset.sortDirection;
+          let newSortDirection;
+
+          if (currentSortDirection === 'desc') {
+            newSortDirection = 'asc';
+          } else { // Undefined or 'asc'
+            newSortDirection = 'desc'; 
+          }
+
+          this.taskManager.sortTasks(boardIndex, 'priority', newSortDirection);
+          sortPriorityButton.dataset.sortDirection = newSortDirection;
+
+          const icon = sortPriorityButton.querySelector('i');
+          icon.classList.remove('fa-star', 'fa-sort-amount-up', 'fa-sort-amount-down');
+          if (newSortDirection === 'asc') {
+            icon.classList.add('fa-sort-amount-up');
+          } else {
+            icon.classList.add('fa-sort-amount-down');
+          }
+        }
       });
     }
   }
