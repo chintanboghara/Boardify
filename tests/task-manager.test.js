@@ -485,6 +485,159 @@ describe('TaskManager', () => {
       });
     });
   });
+
+  describe('Subtask Management', () => {
+    let parentTaskId;
+    const initialTaskDetails = {
+      title: 'Parent Task for Subtasks',
+      description: 'Parent Description',
+      priority: 'high',
+      dueDate: '2024-12-31',
+      assignee: 'Test User',
+      columnIndex: 0
+    };
+
+    beforeEach(() => {
+      // Add a parent task before each subtask test
+      taskManager.addTask(
+        initialTaskDetails.title,
+        initialTaskDetails.description,
+        initialTaskDetails.priority,
+        initialTaskDetails.dueDate,
+        initialTaskDetails.assignee,
+        initialTaskDetails.columnIndex
+      );
+      const tasks = taskManager.getTasks();
+      parentTaskId = tasks.find(t => t.title === initialTaskDetails.title).id;
+      // Reset setItem mock calls for each specific subtask test, 
+      // as addTask already calls it.
+      localStorageMock.setItem.mockClear();
+    });
+
+    it('should add a subtask to a parent task', () => {
+      const subtaskTitle = 'New Subtask Title';
+      taskManager.addSubtask(parentTaskId, subtaskTitle);
+      
+      const parentTask = taskManager.getTasks().find(t => t.id === parentTaskId);
+      expect(parentTask.subtasks).toBeDefined();
+      expect(parentTask.subtasks.length).toBe(1);
+      expect(parentTask.subtasks[0].title).toBe(subtaskTitle);
+      expect(parentTask.subtasks[0].completed).toBe(false);
+      expect(parentTask.subtasks[0].id).toMatch(/^sub_/); // Check if subtask ID has the prefix
+      expect(localStorageMock.setItem).toHaveBeenCalled();
+    });
+
+    it('should edit an existing subtask', () => {
+      const subtaskTitle = 'Initial Subtask';
+      taskManager.addSubtask(parentTaskId, subtaskTitle);
+      let parentTask = taskManager.getTasks().find(t => t.id === parentTaskId);
+      const subtaskId = parentTask.subtasks[0].id;
+      localStorageMock.setItem.mockClear(); // Clear after addSubtask's save
+
+      const updatedSubtaskTitle = 'Updated Subtask Title';
+      taskManager.editSubtask(parentTaskId, subtaskId, updatedSubtaskTitle);
+
+      parentTask = taskManager.getTasks().find(t => t.id === parentTaskId);
+      expect(parentTask.subtasks[0].title).toBe(updatedSubtaskTitle);
+      expect(localStorageMock.setItem).toHaveBeenCalled();
+    });
+
+    it('should toggle subtask completion status', () => {
+      taskManager.addSubtask(parentTaskId, 'Toggle Me Subtask');
+      let parentTask = taskManager.getTasks().find(t => t.id === parentTaskId);
+      const subtaskId = parentTask.subtasks[0].id;
+      localStorageMock.setItem.mockClear();
+
+      // First toggle: false -> true
+      taskManager.toggleSubtaskCompletion(parentTaskId, subtaskId);
+      parentTask = taskManager.getTasks().find(t => t.id === parentTaskId);
+      expect(parentTask.subtasks[0].completed).toBe(true);
+      expect(localStorageMock.setItem).toHaveBeenCalledTimes(1);
+
+      // Second toggle: true -> false
+      taskManager.toggleSubtaskCompletion(parentTaskId, subtaskId);
+      parentTask = taskManager.getTasks().find(t => t.id === parentTaskId);
+      expect(parentTask.subtasks[0].completed).toBe(false);
+      expect(localStorageMock.setItem).toHaveBeenCalledTimes(2);
+    });
+
+    it('should delete a subtask from a parent task', () => {
+      taskManager.addSubtask(parentTaskId, 'Subtask to Delete');
+      taskManager.addSubtask(parentTaskId, 'Subtask to Keep');
+      let parentTask = taskManager.getTasks().find(t => t.id === parentTaskId);
+      const subtaskIdToDelete = parentTask.subtasks[0].id;
+      const subtaskIdToKeep = parentTask.subtasks[1].id;
+      localStorageMock.setItem.mockClear();
+
+      taskManager.deleteSubtask(parentTaskId, subtaskIdToDelete);
+      parentTask = taskManager.getTasks().find(t => t.id === parentTaskId);
+
+      expect(parentTask.subtasks.length).toBe(1);
+      expect(parentTask.subtasks.find(s => s.id === subtaskIdToDelete)).toBeUndefined();
+      expect(parentTask.subtasks[0].id).toBe(subtaskIdToKeep);
+      expect(parentTask.subtasks[0].title).toBe('Subtask to Keep');
+      expect(localStorageMock.setItem).toHaveBeenCalled();
+    });
+
+    // Optional: Error Handling Tests
+    describe('Error Handling for Subtasks', () => {
+      let consoleErrorSpy;
+
+      beforeEach(() => {
+        consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      });
+
+      afterEach(() => {
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should log an error when adding subtask to non-existent parent', () => {
+        taskManager.addSubtask('nonExistentParentId', 'Subtask Title');
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Parent task with ID nonExistentParentId not found.');
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      });
+
+      it('should log an error when editing subtask of non-existent parent', () => {
+        taskManager.editSubtask('nonExistentParentId', 'subId', 'New Title');
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Parent task with ID nonExistentParentId not found.');
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      });
+      
+      it('should log an error when editing non-existent subtask', () => {
+        taskManager.editSubtask(parentTaskId, 'nonExistentSubId', 'New Title');
+        expect(consoleErrorSpy).toHaveBeenCalledWith(`Subtask with ID nonExistentSubId not found in parent task ${parentTaskId}.`);
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      });
+
+      it('should log an error when toggling subtask of non-existent parent', () => {
+        taskManager.toggleSubtaskCompletion('nonExistentParentId', 'subId');
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Parent task with ID nonExistentParentId not found.');
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      });
+
+      it('should log an error when toggling non-existent subtask', () => {
+        taskManager.toggleSubtaskCompletion(parentTaskId, 'nonExistentSubId');
+        expect(consoleErrorSpy).toHaveBeenCalledWith(`Subtask with ID nonExistentSubId not found in parent task ${parentTaskId}.`);
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      });
+
+      it('should log an error when deleting subtask of non-existent parent', () => {
+        taskManager.deleteSubtask('nonExistentParentId', 'subId');
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Parent task with ID nonExistentParentId not found.');
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      });
+
+      it('should not fail when deleting a non-existent subtask from an existing parent (filter handles this gracefully)', () => {
+        taskManager.deleteSubtask(parentTaskId, 'nonExistentSubId');
+        // No error message is explicitly logged in this case by the current implementation,
+        // as filter simply won't find a match and the subtasks array remains unchanged or as is.
+        // We can assert that console.error was NOT called for this specific scenario,
+        // and that saveTasks was still called (as per current implementation).
+        expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining('nonExistentSubId'));
+        expect(localStorageMock.setItem).toHaveBeenCalled(); // saveTasks is called even if subtask not found
+      });
+    });
+  });
 });
 
 // Note: For renderTask and other DOM-heavy methods, you'd typically check:

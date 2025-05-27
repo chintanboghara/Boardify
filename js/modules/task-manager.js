@@ -13,7 +13,13 @@ class TaskManager {
 
     // Load tasks from localStorage or initialize with an empty array.
     this.tasks = JSON.parse(localStorage.getItem(this.tasksKey)) || [];
-    this.filteredTasks = [...this.tasks];
+    // Migration for existing tasks that might not have subtasks array
+    this.tasks.forEach(task => {
+      if (!Array.isArray(task.subtasks)) { // Check if it's not an array (covers undefined or wrong type)
+        task.subtasks = [];
+      }
+    });
+    this.filteredTasks = [...this.tasks]; // Update filteredTasks accordingly
     this.editingTaskId = null;
     this.taskModal = null;
     this.taskForm = null;
@@ -122,6 +128,113 @@ class TaskManager {
       this.editingTaskId = null;
       this.taskForm.reset();
       this.taskModal.querySelector('h3').textContent = 'Add New Task';
+      // Clear subtask list for new tasks
+      const subtaskListElement = document.getElementById('subtask-list');
+      if (subtaskListElement) {
+        subtaskListElement.innerHTML = '';
+      }
+    }
+
+    // Render subtasks if editing an existing task
+    if (task && task.id) {
+      this._renderSubtasks(task.id);
+    }
+
+    // Event Listeners for Subtasks
+    // Ensure to remove existing listeners before adding new ones to prevent duplication
+    // if openTaskModal can be called multiple times for the same modal instance.
+    // However, since the modal is likely recreated or listeners are specific to its content,
+    // this might be simpler. For robustness, manage listeners carefully.
+
+    const addSubtaskBtn = document.getElementById('add-subtask-btn');
+    const newSubtaskTitleInput = document.getElementById('new-subtask-title');
+    const subtaskListElement = document.getElementById('subtask-list');
+
+    // Handler for adding a subtask
+    // Store handlers to remove them later if necessary, or use .onclick for simplicity if only one handler.
+    // Using a named function allows for easier removal if openTaskModal is called multiple times.
+    const handleAddSubtask = () => {
+      const title = newSubtaskTitleInput.value.trim();
+      if (!title) {
+        alert('Subtask title cannot be empty.');
+        return;
+      }
+      if (!this.editingTaskId) {
+        alert('Please save the main task before adding subtasks.');
+        return;
+      }
+      this.addSubtask(this.editingTaskId, title);
+      this._renderSubtasks(this.editingTaskId);
+      newSubtaskTitleInput.value = '';
+    };
+
+    // Remove previous listener before adding a new one to avoid duplicates
+    if (addSubtaskBtn._clickHandler) {
+      addSubtaskBtn.removeEventListener('click', addSubtaskBtn._clickHandler);
+    }
+    addSubtaskBtn._clickHandler = handleAddSubtask; // Store reference for potential removal
+    addSubtaskBtn.addEventListener('click', handleAddSubtask);
+
+
+    // Handler for subtask list interactions (toggle, delete)
+    const handleSubtaskListClick = (event) => {
+      if (!this.editingTaskId) return;
+
+      const target = event.target;
+      const subtaskLi = target.closest('li');
+      if (!subtaskLi || !subtaskLi.dataset.subtaskId) return;
+      
+      const subtaskId = subtaskLi.dataset.subtaskId;
+
+      if (target.classList.contains('subtask-checkbox')) {
+        this.toggleSubtaskCompletion(this.editingTaskId, subtaskId);
+        this._renderSubtasks(this.editingTaskId);
+      } else if (target.closest('.subtask-delete-btn')) {
+        this.deleteSubtask(this.editingTaskId, subtaskId);
+        this._renderSubtasks(this.editingTaskId);
+      }
+    };
+    
+    if (subtaskListElement._clickHandler) {
+        subtaskListElement.removeEventListener('click', subtaskListElement._clickHandler);
+    }
+    subtaskListElement._clickHandler = handleSubtaskListClick;
+    subtaskListElement.addEventListener('click', handleSubtaskListClick);
+  }
+  
+  /**
+   * Private helper method to render subtasks in the modal.
+   * @param {string} parentTaskId - The ID of the parent task.
+   */
+  _renderSubtasks(parentTaskId) {
+    const parentTask = this.tasks.find(t => t.id === parentTaskId);
+    const subtaskListElement = document.getElementById('subtask-list');
+
+    if (!parentTask || !subtaskListElement) {
+      if (subtaskListElement) subtaskListElement.innerHTML = ''; // Clear if no parent task but list exists
+      return;
+    }
+
+    subtaskListElement.innerHTML = ''; // Clear existing subtasks
+
+    if (parentTask.subtasks && parentTask.subtasks.length > 0) {
+      parentTask.subtasks.forEach(subtask => {
+        const li = document.createElement('li');
+        li.className = `flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded-md`;
+        li.dataset.subtaskId = subtask.id; // Set data-subtask-id on the li
+
+        li.innerHTML = `
+          <div class="flex items-center">
+            <input type="checkbox" class="subtask-checkbox form-checkbox h-4 w-4 text-indigo-600 rounded border-gray-300 dark:border-gray-500 dark:bg-gray-600 focus:ring-indigo-500 dark:focus:ring-indigo-400" ${subtask.completed ? 'checked' : ''}>
+            <span class="ml-2 text-sm text-gray-800 dark:text-gray-200 ${subtask.completed ? 'line-through' : ''}">${subtask.title}</span>
+          </div>
+          <button type="button" class="subtask-delete-btn text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-500">
+            <i class="fas fa-trash-alt text-xs"></i>
+          </button>
+        `;
+        // The checkbox and delete button don't strictly need individual data-subtask-id if we use closest('li').dataset.subtaskId
+        subtaskListElement.appendChild(li);
+      });
     }
   }
 
@@ -179,6 +292,7 @@ class TaskManager {
       dueDate,
       assignee,
       column: columnIndex,
+      subtasks: [] // Add this line
     };
     this.tasks.push(newTask);
     this.saveTasks();
@@ -354,6 +468,21 @@ class TaskManager {
     }
 
     const priorityClass = this.getPriorityClass(task.priority);
+
+    // Calculate Subtask Statistics & Generate Display HTML
+    let subtaskDisplayHtml = '';
+    if (task.subtasks && task.subtasks.length > 0) {
+      const totalSubtasks = task.subtasks.length;
+      const completedSubtasks = task.subtasks.filter(st => st.completed).length;
+      const progressPercentage = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
+      subtaskDisplayHtml = `
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 mb-1">Subtasks: ${completedSubtasks} / ${totalSubtasks}</p>
+        <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mb-2">
+          <div class="bg-indigo-600 h-1.5 rounded-full" style="width: ${progressPercentage}%"></div>
+        </div>
+      `;
+    }
+
     taskElement.innerHTML = `
       <div class="flex justify-between items-start mb-3">
         <h4 class="font-medium text-gray-900 dark:text-white text-lg">${task.title}</h4>
@@ -364,8 +493,9 @@ class TaskManager {
       <p class="text-gray-600 dark:text-gray-400 text-sm break-words line-clamp-3 mb-4">
         ${task.description || 'No description'}
       </p>
-      ${task.dueDate ? `<p class="text-sm ${isOverdue ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'}">Due: ${new Date(task.dueDate).toLocaleDateString()}</p>` : ''}
-      ${task.assignee ? `<p class="text-gray-600 dark:text-gray-400 break-words line-clamp-3 text-sm">Assignee: ${task.assignee}</p>` : ''}
+      ${subtaskDisplayHtml}
+      ${task.dueDate ? `<p class="text-sm ${isOverdue ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'} mt-1">Due: ${new Date(task.dueDate).toLocaleDateString()}</p>` : ''}
+      ${task.assignee ? `<p class="text-gray-600 dark:text-gray-400 break-words line-clamp-3 text-sm mt-1">Assignee: ${task.assignee}</p>` : ''}
       <div class="flex justify-end space-x-2 mt-auto pt-2">
         <button class="edit-task-btn p-2 text-gray-700 rounded-md transition-all hover:bg-white/20 dark:text-gray-300" data-task-id="${task.id}">
           <i class="fas fa-pencil-alt text-sm"></i>
@@ -511,6 +641,93 @@ class TaskManager {
     // This is implicitly handled by filtering and spreading, but good to be mindful of.
     
     this.saveTasks(); // This will re-render the tasks in sorted order.
+  }
+
+  /**
+   * Adds a subtask to a parent task.
+   * @param {string} parentTaskId - The ID of the parent task.
+   * @param {string} subtaskTitle - The title of the new subtask.
+   */
+  addSubtask(parentTaskId, subtaskTitle) {
+    const parentTask = this.tasks.find(task => task.id === parentTaskId);
+    if (!parentTask) {
+      console.error(`Parent task with ID ${parentTaskId} not found.`);
+      return;
+    }
+
+    // Ensure subtasks array exists (should be guaranteed by constructor/addTask)
+    if (!Array.isArray(parentTask.subtasks)) {
+      parentTask.subtasks = [];
+    }
+
+    const newSubtask = {
+      id: `sub_${Date.now().toString()}`,
+      title: subtaskTitle,
+      completed: false,
+    };
+    parentTask.subtasks.push(newSubtask);
+    this.saveTasks();
+  }
+
+  /**
+   * Edits the title of an existing subtask.
+   * @param {string} parentTaskId - The ID of the parent task.
+   * @param {string} subtaskId - The ID of the subtask to edit.
+   * @param {string} newTitle - The new title for the subtask.
+   */
+  editSubtask(parentTaskId, subtaskId, newTitle) {
+    const parentTask = this.tasks.find(task => task.id === parentTaskId);
+    if (!parentTask) {
+      console.error(`Parent task with ID ${parentTaskId} not found.`);
+      return;
+    }
+
+    const subtask = parentTask.subtasks.find(sub => sub.id === subtaskId);
+    if (!subtask) {
+      console.error(`Subtask with ID ${subtaskId} not found in parent task ${parentTaskId}.`);
+      return;
+    }
+
+    subtask.title = newTitle;
+    this.saveTasks();
+  }
+
+  /**
+   * Toggles the completion status of a subtask.
+   * @param {string} parentTaskId - The ID of the parent task.
+   * @param {string} subtaskId - The ID of the subtask to toggle.
+   */
+  toggleSubtaskCompletion(parentTaskId, subtaskId) {
+    const parentTask = this.tasks.find(task => task.id === parentTaskId);
+    if (!parentTask) {
+      console.error(`Parent task with ID ${parentTaskId} not found.`);
+      return;
+    }
+
+    const subtask = parentTask.subtasks.find(sub => sub.id === subtaskId);
+    if (!subtask) {
+      console.error(`Subtask with ID ${subtaskId} not found in parent task ${parentTaskId}.`);
+      return;
+    }
+
+    subtask.completed = !subtask.completed;
+    this.saveTasks();
+  }
+
+  /**
+   * Deletes a subtask from a parent task.
+   * @param {string} parentTaskId - The ID of the parent task.
+   * @param {string} subtaskId - The ID of the subtask to delete.
+   */
+  deleteSubtask(parentTaskId, subtaskId) {
+    const parentTask = this.tasks.find(task => task.id === parentTaskId);
+    if (!parentTask) {
+      console.error(`Parent task with ID ${parentTaskId} not found.`);
+      return;
+    }
+
+    parentTask.subtasks = parentTask.subtasks.filter(sub => sub.id !== subtaskId);
+    this.saveTasks();
   }
 }
 

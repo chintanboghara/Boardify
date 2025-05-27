@@ -581,6 +581,33 @@
               />
             </div>
 
+            <!-- Subtasks Section -->
+            <div class="mb-4">
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Subtasks</label>
+              <!-- List of existing subtasks -->
+              <ul id="subtask-list" class="mb-2 space-y-2">
+                <!-- Subtask items will be dynamically inserted here by JavaScript -->
+                <!-- Example of a subtask item (for structure reference):
+                <li class="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded-md">
+                  <div class="flex items-center">
+                    <input type="checkbox" class="subtask-checkbox form-checkbox h-4 w-4 text-indigo-600 rounded border-gray-300 dark:border-gray-500 dark:bg-gray-600 focus:ring-indigo-500 dark:focus:ring-indigo-400" data-subtask-id="sub_id_1">
+                    <span class="ml-2 text-sm text-gray-800 dark:text-gray-200">Subtask title here</span>
+                  </div>
+                  <button type="button" class="subtask-delete-btn text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-500" data-subtask-id="sub_id_1">
+                    <i class="fas fa-trash-alt text-xs"></i>
+                  </button>
+                </li>
+                -->
+              </ul>
+              <!-- Add new subtask input -->
+              <div class="flex items-center mt-2">
+                <input type="text" id="new-subtask-title" class="flex-grow rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-[#202227] dark:text-white dark:focus:ring-indigo-400" placeholder="Add new subtask...">
+                <button type="button" id="add-subtask-btn" class="ml-2 rounded-md bg-indigo-500 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-600 dark:bg-indigo-400 dark:hover:bg-indigo-500">
+                  <i class="fas fa-plus"></i> Add
+                </button>
+              </div>
+            </div>
+
             <!-- Form Buttons -->
             <div class="mt-6 flex justify-end space-x-4">
               <button
