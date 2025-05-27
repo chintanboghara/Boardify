@@ -531,9 +531,9 @@ class TaskManager {
           ${task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : 'Low'}
         </span>
       </div>
-      <p class="text-gray-600 dark:text-gray-400 text-sm break-words line-clamp-3 mb-4">
-        ${task.description || 'No description'}
-      </p>
+      <div class="prose prose-sm dark:prose-invert text-gray-600 dark:text-gray-400 break-words line-clamp-3 mb-4">
+        ${task.description ? marked.parse(task.description) : '<p class="text-gray-500 italic">No description</p>'}
+      </div>
       ${subtaskDisplayHtml}
       ${task.dueDate ? `<p class="text-sm ${isOverdue ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'} mt-1">Due: ${new Date(task.dueDate).toLocaleDateString()}</p>` : ''}
       ${task.assignee ? `<p class="text-gray-600 dark:text-gray-400 break-words line-clamp-3 text-sm mt-1">Assignee: ${task.assignee}</p>` : ''}
