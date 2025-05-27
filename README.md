@@ -13,6 +13,7 @@ Boardify is a simple yet powerful Kanban board application designed for efficien
 -   **Task Prioritization:** Assign priorities (e.g., Low, Medium, High) to tasks for better organization.
 -   **Search & Filter:** Quickly find specific tasks using the built-in search functionality.
 -   **Task Breakdown (Subtasks):** Break down complex tasks into smaller, manageable subtasks. Each subtask can be marked as complete, and progress is visually displayed on the parent task card. Subtasks are managed within the task editing modal.
+-   **Task Activity Log:** Keep track of changes to your tasks. Each task now has an activity log that records actions like creation, updates to key fields (title, description, priority, etc.), and subtask modifications. Logs are viewable within the task editing modal.
 -   **Multiple Board Support:** Manage several distinct Kanban boards simultaneously.
 -   **Visual Due Date Indicators:** Tasks are visually highlighted if they are overdue, due today, or due soon (within the next 3 days), helping users prioritize effectively.
 -   **Sort by Due Date:** Each board allows tasks to be sorted by their due date in ascending or descending order, providing flexibility in task organization.

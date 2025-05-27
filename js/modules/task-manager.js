@@ -14,9 +14,14 @@ class TaskManager {
     // Load tasks from localStorage or initialize with an empty array.
     this.tasks = JSON.parse(localStorage.getItem(this.tasksKey)) || [];
     // Migration for existing tasks that might not have subtasks array
+    // Migration for existing tasks that might not have subtasks array
     this.tasks.forEach(task => {
       if (!Array.isArray(task.subtasks)) { // Check if it's not an array (covers undefined or wrong type)
         task.subtasks = [];
+      }
+      // Migration for activityLog
+      if (!Array.isArray(task.activityLog)) {
+        task.activityLog = [];
       }
     });
     this.filteredTasks = [...this.tasks]; // Update filteredTasks accordingly
@@ -200,6 +205,17 @@ class TaskManager {
     }
     subtaskListElement._clickHandler = handleSubtaskListClick;
     subtaskListElement.addEventListener('click', handleSubtaskListClick);
+
+    // Render Activity Log if editing an existing task
+    if (task && task.id) {
+      this._renderActivityLog(task.id);
+    } else {
+      // Clear activity log list for new tasks
+      const activityLogListElement = document.getElementById('activity-log-list');
+      if (activityLogListElement) {
+        activityLogListElement.innerHTML = '';
+      }
+    }
   }
   
   /**
@@ -292,9 +308,11 @@ class TaskManager {
       dueDate,
       assignee,
       column: columnIndex,
-      subtasks: [] // Add this line
+      subtasks: [],
+      activityLog: [] // Add this line
     };
     this.tasks.push(newTask);
+    this._logActivity(newTask.id, 'TASK_CREATED', 'Task was created.');
     this.saveTasks();
   }
 
@@ -310,6 +328,7 @@ class TaskManager {
   updateTask(taskId, title, description, priority, dueDate, assignee) {
     const taskIndex = this.tasks.findIndex(task => task.id === taskId);
     if (taskIndex !== -1) {
+      const originalTask = JSON.parse(JSON.stringify(this.tasks[taskIndex]));
       this.tasks[taskIndex] = {
         ...this.tasks[taskIndex],
         title,
@@ -318,6 +337,23 @@ class TaskManager {
         dueDate,
         assignee,
       };
+
+      if (originalTask.title !== this.tasks[taskIndex].title) {
+        this._logActivity(taskId, 'FIELD_UPDATED', `Title changed from "${originalTask.title}" to "${this.tasks[taskIndex].title}".`);
+      }
+      if (originalTask.description !== this.tasks[taskIndex].description) {
+        this._logActivity(taskId, 'FIELD_UPDATED', `Description updated.`);
+      }
+      if (originalTask.priority !== this.tasks[taskIndex].priority) {
+        this._logActivity(taskId, 'FIELD_UPDATED', `Priority changed from "${originalTask.priority}" to "${this.tasks[taskIndex].priority}".`);
+      }
+      if (originalTask.dueDate !== this.tasks[taskIndex].dueDate) {
+        this._logActivity(taskId, 'FIELD_UPDATED', `Due date changed from "${originalTask.dueDate || 'none'}" to "${this.tasks[taskIndex].dueDate || 'none'}".`);
+      }
+      if (originalTask.assignee !== this.tasks[taskIndex].assignee) {
+        this._logActivity(taskId, 'FIELD_UPDATED', `Assignee changed from "${originalTask.assignee || 'none'}" to "${this.tasks[taskIndex].assignee || 'none'}".`);
+      }
+
       this.saveTasks();
     }
   }
@@ -666,6 +702,7 @@ class TaskManager {
       completed: false,
     };
     parentTask.subtasks.push(newSubtask);
+    this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${newSubtask.title}" added.`);
     this.saveTasks();
   }
 
@@ -688,7 +725,9 @@ class TaskManager {
       return;
     }
 
+    const originalSubtaskTitle = subtask.title;
     subtask.title = newTitle;
+    this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${originalSubtaskTitle}" title changed to "${newTitle}".`);
     this.saveTasks();
   }
 
@@ -711,6 +750,7 @@ class TaskManager {
     }
 
     subtask.completed = !subtask.completed;
+    this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${subtask.title}" marked as ${subtask.completed ? 'complete' : 'incomplete'}.`);
     this.saveTasks();
   }
 
@@ -726,8 +766,77 @@ class TaskManager {
       return;
     }
 
+    const subtaskToDelete = parentTask.subtasks.find(sub => sub.id === subtaskId);
     parentTask.subtasks = parentTask.subtasks.filter(sub => sub.id !== subtaskId);
+    if (subtaskToDelete) {
+      this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${subtaskToDelete.title}" deleted.`);
+    }
     this.saveTasks();
+  }
+
+  /**
+   * Private helper method to log an activity for a task.
+   * @param {string} taskId - The ID of the task.
+   * @param {string} activityType - The type of activity (e.g., 'TASK_CREATED', 'TITLE_UPDATED').
+   * @param {string} detailsString - A string describing the activity.
+   */
+  _logActivity(taskId, activityType, detailsString) {
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) {
+      console.error(`Task not found for logging activity: ${taskId}`);
+      return;
+    }
+    // Ensure activityLog array exists (should be guaranteed by constructor/addTask)
+    if (!Array.isArray(task.activityLog)) {
+      console.error(`activityLog array missing for task: ${taskId}. Initializing.`);
+      task.activityLog = [];
+    }
+    const logEntry = {
+      id: `log_${Date.now().toString()}_${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      type: activityType,
+      details: detailsString
+    };
+    task.activityLog.unshift(logEntry);
+    // No this.saveTasks() here, as the calling method will handle it.
+  }
+
+  /**
+   * Private helper method to render the activity log in the modal.
+   * @param {string} parentTaskId - The ID of the parent task.
+   */
+  _renderActivityLog(parentTaskId) {
+    const parentTask = this.tasks.find(t => t.id === parentTaskId);
+    const activityLogListElement = document.getElementById('activity-log-list');
+
+    if (!activityLogListElement) {
+      console.error('Activity log list element not found.');
+      return;
+    }
+
+    activityLogListElement.innerHTML = ''; // Clear existing logs
+
+    if (parentTask && parentTask.activityLog && parentTask.activityLog.length > 0) {
+      parentTask.activityLog.forEach(logEntry => {
+        const li = document.createElement('li');
+        li.className = 'text-xs text-gray-600 dark:text-gray-400 py-1';
+        
+        const timestamp = new Date(logEntry.timestamp);
+        const formattedTimestamp = `${timestamp.toLocaleDateString()} ${timestamp.toLocaleTimeString()}`;
+
+        li.innerHTML = `
+          <span class="font-semibold text-gray-700 dark:text-gray-300">${formattedTimestamp}:</span> ${logEntry.details}
+          <!-- <span class="text-gray-500 dark:text-gray-500">(${logEntry.type})</span> -->
+        `;
+        activityLogListElement.appendChild(li);
+      });
+    } else if (parentTask) { // Task exists but no logs
+      const li = document.createElement('li');
+      li.className = 'text-xs text-gray-500 dark:text-gray-400 py-1 italic';
+      li.textContent = 'No activity yet for this task.';
+      activityLogListElement.appendChild(li);
+    }
+    // If no parentTask, list remains empty which is fine.
   }
 }
 

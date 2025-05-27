@@ -638,6 +638,152 @@ describe('TaskManager', () => {
       });
     });
   });
+
+  describe('Activity Logging', () => {
+    let taskId;
+    const initialTaskDetails = {
+      title: 'Log Test Task',
+      description: 'Initial Description',
+      priority: 'medium',
+      dueDate: '2024-01-01',
+      assignee: 'User Alpha',
+      columnIndex: 0
+    };
+
+    beforeEach(() => {
+      // Add a task before each test in this block
+      taskManager.addTask(
+        initialTaskDetails.title,
+        initialTaskDetails.description,
+        initialTaskDetails.priority,
+        initialTaskDetails.dueDate,
+        initialTaskDetails.assignee,
+        initialTaskDetails.columnIndex
+      );
+      const tasks = taskManager.getTasks();
+      // Find the task that was just added. Since tasks might be added by other tests,
+      // we ensure we get the one for this test block.
+      const currentTask = tasks.find(t => t.title === initialTaskDetails.title && t.activityLog.length === 1);
+      taskId = currentTask.id;
+      // Clear setItem mock calls for each specific activity log test
+      localStorageMock.setItem.mockClear();
+    });
+
+    it('should log when a task is created', () => {
+      const task = taskManager.getTasks().find(t => t.id === taskId);
+      expect(task.activityLog).toBeDefined();
+      expect(task.activityLog.length).toBe(1);
+      expect(task.activityLog[0].type).toBe('TASK_CREATED');
+      expect(task.activityLog[0].details).toBe('Task was created.');
+      expect(task.activityLog[0].timestamp).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z/);
+      expect(task.activityLog[0].id).toEqual(expect.any(String));
+    });
+
+    it('should log when task fields are updated', () => {
+      taskManager.updateTask(taskId, 'New Title', 'New Desc', 'high', '2025-01-01', 'New Assignee');
+      const task = taskManager.getTasks().find(t => t.id === taskId);
+
+      // Greater than 1 because of the initial TASK_CREATED log + 5 field updates
+      expect(task.activityLog.length).toBe(1 + 5); 
+      
+      // Logs are prepended (newest first)
+      expect(task.activityLog).toContainEqual(expect.objectContaining({ type: 'FIELD_UPDATED', details: `Title changed from "${initialTaskDetails.title}" to "New Title".` }));
+      expect(task.activityLog).toContainEqual(expect.objectContaining({ type: 'FIELD_UPDATED', details: 'Description updated.' }));
+      expect(task.activityLog).toContainEqual(expect.objectContaining({ type: 'FIELD_UPDATED', details: `Priority changed from "${initialTaskDetails.priority}" to "high".` }));
+      expect(task.activityLog).toContainEqual(expect.objectContaining({ type: 'FIELD_UPDATED', details: `Due date changed from "${initialTaskDetails.dueDate}" to "2025-01-01".` }));
+      expect(task.activityLog).toContainEqual(expect.objectContaining({ type: 'FIELD_UPDATED', details: `Assignee changed from "${initialTaskDetails.assignee}" to "New Assignee".` }));
+    });
+
+    it('should not log field updates if fields are not changed', () => {
+      taskManager.updateTask(taskId, initialTaskDetails.title, initialTaskDetails.description, initialTaskDetails.priority, initialTaskDetails.dueDate, initialTaskDetails.assignee);
+      const task = taskManager.getTasks().find(t => t.id === taskId);
+      // Only the initial TASK_CREATED log should be present
+      expect(task.activityLog.length).toBe(1); 
+    });
+
+    describe('Subtask Activity Logs', () => {
+      let subtaskId;
+      const subtaskTitle = 'My Test Subtask';
+
+      beforeEach(() => {
+        // Add a subtask for tests that need one
+        taskManager.addSubtask(taskId, subtaskTitle);
+        const parentTask = taskManager.getTasks().find(t => t.id === taskId);
+        subtaskId = parentTask.subtasks[0].id;
+        // Clear mocks after setup for subtask tests
+        localStorageMock.setItem.mockClear(); 
+      });
+
+      it('should log when a subtask is added', () => {
+        // The subtask was added in beforeEach, log was created there.
+        // We need to check the log from that operation.
+        // Re-add a subtask to make the test self-contained for this specific check or check existing log.
+        const taskAfterInitialSubtaskAdd = taskManager.getTasks().find(t => t.id === taskId);
+        // Expecting TASK_CREATED, and one SUBTASK_ACTIVITY for the subtask added in beforeEach
+        expect(taskAfterInitialSubtaskAdd.activityLog.length).toBe(1 + 1); 
+        expect(taskAfterInitialSubtaskAdd.activityLog[0]).toMatchObject({
+          type: 'SUBTASK_ACTIVITY',
+          details: `Subtask "${subtaskTitle}" added.`
+        });
+      });
+
+      it('should log when a subtask title is edited', () => {
+        const updatedSubtaskTitle = 'Updated Test Subtask';
+        taskManager.editSubtask(taskId, subtaskId, updatedSubtaskTitle);
+        const task = taskManager.getTasks().find(t => t.id === taskId);
+        // TASK_CREATED, SUBTASK_ADDED (from beforeEach), SUBTASK_EDITED
+        expect(task.activityLog.length).toBe(1 + 1 + 1); 
+        expect(task.activityLog[0]).toMatchObject({
+          type: 'SUBTASK_ACTIVITY',
+          details: `Subtask "${subtaskTitle}" title changed to "${updatedSubtaskTitle}".`
+        });
+      });
+
+      it('should log when subtask completion is toggled', () => {
+        // Toggle 1: false -> true
+        taskManager.toggleSubtaskCompletion(taskId, subtaskId);
+        let task = taskManager.getTasks().find(t => t.id === taskId);
+        expect(task.activityLog.length).toBe(1 + 1 + 1); // Created, Added, Toggled
+        expect(task.activityLog[0]).toMatchObject({
+          type: 'SUBTASK_ACTIVITY',
+          details: `Subtask "${subtaskTitle}" marked as complete.`
+        });
+
+        localStorageMock.setItem.mockClear();
+        // Toggle 2: true -> false
+        taskManager.toggleSubtaskCompletion(taskId, subtaskId);
+        task = taskManager.getTasks().find(t => t.id === taskId);
+        expect(task.activityLog.length).toBe(1 + 1 + 1 + 1); // Created, Added, Toggled, Toggled
+        expect(task.activityLog[0]).toMatchObject({
+          type: 'SUBTASK_ACTIVITY',
+          details: `Subtask "${subtaskTitle}" marked as incomplete.`
+        });
+      });
+
+      it('should log when a subtask is deleted', () => {
+        taskManager.deleteSubtask(taskId, subtaskId);
+        const task = taskManager.getTasks().find(t => t.id === taskId);
+        expect(task.activityLog.length).toBe(1 + 1 + 1); // Created, Added, Deleted
+        expect(task.activityLog[0]).toMatchObject({
+          type: 'SUBTASK_ACTIVITY',
+          details: `Subtask "${subtaskTitle}" deleted.`
+        });
+      });
+    });
+
+    it('should log activities in the correct order (newest first)', () => {
+      taskManager.updateTask(taskId, 'Updated Title Once', initialTaskDetails.description, initialTaskDetails.priority, initialTaskDetails.dueDate, initialTaskDetails.assignee);
+      localStorageMock.setItem.mockClear();
+      taskManager.updateTask(taskId, 'Updated Title Twice', initialTaskDetails.description, initialTaskDetails.priority, initialTaskDetails.dueDate, initialTaskDetails.assignee);
+      
+      const task = taskManager.getTasks().find(t => t.id === taskId);
+      // TASK_CREATED, FIELD_UPDATED (title once), FIELD_UPDATED (title twice)
+      expect(task.activityLog.length).toBe(3); 
+      expect(task.activityLog[0].details).toBe(`Title changed from "Updated Title Once" to "Updated Title Twice".`);
+      expect(task.activityLog[1].details).toBe(`Title changed from "${initialTaskDetails.title}" to "Updated Title Once".`);
+      expect(task.activityLog[2].type).toBe('TASK_CREATED');
+    });
+  });
 });
 
 // Note: For renderTask and other DOM-heavy methods, you'd typically check:
