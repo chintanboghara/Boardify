@@ -621,6 +621,37 @@
               </ul>
             </div>
 
+            <!-- Attachments Section -->
+            <div class="mb-4">
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Attachments</label>
+              <!-- File Input -->
+              <div class="mb-2">
+                <input type="file" id="task-file-input" class="block w-full text-sm text-gray-500 dark:text-gray-300
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-md file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-indigo-50 dark:file:bg-indigo-800
+                  file:text-indigo-700 dark:file:text-indigo-200
+                  hover:file:bg-indigo-100 dark:hover:file:bg-indigo-700
+                  cursor-pointer">
+              </div>
+              <!-- List of existing attachments -->
+              <ul id="attachment-list" class="mt-1 space-y-1 max-h-32 overflow-y-auto">
+                <!-- Attachment items will be dynamically inserted here by JavaScript -->
+                <!-- Example of an attachment item (for structure reference):
+                <li class="flex items-center justify-between p-1.5 bg-gray-100 dark:bg-gray-700 rounded-md text-xs">
+                  <div class="truncate">
+                    <span class="font-medium text-gray-800 dark:text-gray-200">filename.txt</span>
+                    <span class="text-gray-500 dark:text-gray-400 ml-2">(text/plain, 1.2 KB)</span>
+                  </div>
+                  <button type="button" class="attachment-delete-btn text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-500 ml-2" data-attachment-id="att_id_1">
+                    <i class="fas fa-trash-alt text-xs"></i>
+                  </button>
+                </li>
+                -->
+              </ul>
+            </div>
+
             <!-- Form Buttons -->
             <div class="mt-6 flex justify-end space-x-4">
               <button

@@ -784,6 +784,107 @@ describe('TaskManager', () => {
       expect(task.activityLog[2].type).toBe('TASK_CREATED');
     });
   });
+
+  describe('File Attachment Management', () => {
+    let parentTaskId;
+    const initialTaskDetails = {
+      title: 'Parent Task for Attachments',
+      description: 'Parent Description for Attachments',
+      priority: 'medium',
+      dueDate: '2024-12-01',
+      assignee: 'Attachment User',
+      columnIndex: 0
+    };
+    const mockFile = { name: 'test-file.txt', type: 'text/plain', size: 1234 };
+
+    beforeEach(() => {
+      taskManager.addTask(
+        initialTaskDetails.title,
+        initialTaskDetails.description,
+        initialTaskDetails.priority,
+        initialTaskDetails.dueDate,
+        initialTaskDetails.assignee,
+        initialTaskDetails.columnIndex
+      );
+      const tasks = taskManager.getTasks();
+      // Find the task specifically created for this block, considering activity log length
+      parentTaskId = tasks.find(t => t.title === initialTaskDetails.title && t.activityLog.length === 1).id;
+      localStorageMock.setItem.mockClear(); // Clear after parent task setup
+    });
+
+    it('should add an attachment to a task', () => {
+      taskManager.addAttachment(parentTaskId, mockFile);
+      const task = taskManager.getTasks().find(t => t.id === parentTaskId);
+
+      expect(task.attachments).toBeDefined();
+      expect(task.attachments.length).toBe(1);
+      const attachment = task.attachments[0];
+      expect(attachment.id).toMatch(/^att_/);
+      expect(attachment.fileName).toBe(mockFile.name);
+      expect(attachment.fileType).toBe(mockFile.type);
+      expect(attachment.fileSize).toBe(mockFile.size);
+      expect(attachment.attachedAt).toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z/);
+
+      // Activity log check (TASK_CREATED + ATTACHMENT_ADDED)
+      expect(task.activityLog.length).toBe(2); 
+      expect(task.activityLog[0]).toMatchObject({
+        type: 'ATTACHMENT_ADDED',
+        details: `File "${mockFile.name}" attached.`
+      });
+      expect(localStorageMock.setItem).toHaveBeenCalled();
+    });
+
+    it('should delete an attachment from a task', () => {
+      taskManager.addAttachment(parentTaskId, mockFile);
+      let task = taskManager.getTasks().find(t => t.id === parentTaskId);
+      const attachmentId = task.attachments[0].id;
+      localStorageMock.setItem.mockClear(); // Clear after adding the attachment
+
+      taskManager.deleteAttachment(parentTaskId, attachmentId);
+      task = taskManager.getTasks().find(t => t.id === parentTaskId);
+
+      expect(task.attachments.length).toBe(0);
+
+      // Activity log check (TASK_CREATED + ATTACHMENT_ADDED + ATTACHMENT_REMOVED)
+      expect(task.activityLog.length).toBe(3); 
+      expect(task.activityLog[0]).toMatchObject({
+        type: 'ATTACHMENT_REMOVED',
+        details: `File "${mockFile.name}" removed.`
+      });
+      expect(localStorageMock.setItem).toHaveBeenCalled();
+    });
+
+    describe('Error Handling for Attachments', () => {
+      let consoleErrorSpy;
+
+      beforeEach(() => {
+        consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      });
+
+      afterEach(() => {
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should log an error when adding attachment to non-existent task', () => {
+        taskManager.addAttachment('invalidTaskId', mockFile);
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Task not found for adding attachment: invalidTaskId');
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      });
+
+      it('should log an error when deleting attachment from non-existent task', () => {
+        taskManager.deleteAttachment('invalidTaskId', 'someAttachmentId');
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Task not found for deleting attachment: invalidTaskId');
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      });
+
+      it('should log an error when deleting non-existent attachment', () => {
+        taskManager.deleteAttachment(parentTaskId, 'invalidAttachmentId');
+        expect(consoleErrorSpy).toHaveBeenCalledWith(`Attachment with ID invalidAttachmentId not found in task ${parentTaskId}.`);
+        // saveTasks is NOT called if attachment not found, so setItem should not be called here.
+        expect(localStorageMock.setItem).not.toHaveBeenCalled();
+      });
+    });
+  });
 });
 
 // Note: For renderTask and other DOM-heavy methods, you'd typically check:
