@@ -23,6 +23,10 @@ class TaskManager {
       if (!Array.isArray(task.activityLog)) {
         task.activityLog = [];
       }
+      // Migration for attachments
+      if (!Array.isArray(task.attachments)) {
+        task.attachments = [];
+      }
     });
     this.filteredTasks = [...this.tasks]; // Update filteredTasks accordingly
     this.editingTaskId = null;
@@ -309,7 +313,8 @@ class TaskManager {
       assignee,
       column: columnIndex,
       subtasks: [],
-      activityLog: [] // Add this line
+      activityLog: [],
+      attachments: [] // Add this line
     };
     this.tasks.push(newTask);
     this._logActivity(newTask.id, 'TASK_CREATED', 'Task was created.');
@@ -837,6 +842,122 @@ class TaskManager {
       activityLogListElement.appendChild(li);
     }
     // If no parentTask, list remains empty which is fine.
+  }
+
+  /**
+   * Formats file size in bytes to a human-readable string.
+   * @param {number} bytes - The file size in bytes.
+   * @returns {string} Human-readable file size.
+   */
+  _formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  /**
+   * Private helper method to render attachments in the modal.
+   * @param {string} parentTaskId - The ID of the parent task.
+   */
+  _renderAttachments(parentTaskId) {
+    const parentTask = this.tasks.find(t => t.id === parentTaskId);
+    const attachmentListElement = document.getElementById('attachment-list');
+
+    if (!attachmentListElement) {
+      console.error('Attachment list element (#attachment-list) not found.');
+      return;
+    }
+
+    attachmentListElement.innerHTML = ''; // Clear existing attachments
+
+    if (parentTask && parentTask.attachments && parentTask.attachments.length > 0) {
+      parentTask.attachments.forEach(attachment => {
+        const li = document.createElement('li');
+        li.className = 'flex items-center justify-between p-1.5 bg-gray-100 dark:bg-gray-700 rounded-md text-xs';
+        li.dataset.attachmentId = attachment.id;
+
+        li.innerHTML = `
+          <div class="truncate flex-grow">
+            <span class="font-medium text-gray-800 dark:text-gray-200 break-all">${attachment.fileName}</span>
+            <span class="text-gray-500 dark:text-gray-400 ml-2">(${attachment.fileType || 'unknown type'}, ${this._formatFileSize(attachment.fileSize || 0)})</span>
+          </div>
+          <button type="button" class="attachment-delete-btn text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-500 ml-2 flex-shrink-0">
+            <i class="fas fa-trash-alt text-xs"></i>
+          </button>
+        `;
+        attachmentListElement.appendChild(li);
+      });
+    } else if (parentTask) {
+      const li = document.createElement('li');
+      li.className = 'text-xs text-gray-500 dark:text-gray-400 py-1 italic';
+      li.textContent = 'No files attached.';
+      attachmentListElement.appendChild(li);
+    }
+  }
+
+  /**
+   * Adds a file attachment to a task.
+   * @param {string} taskId - The ID of the task.
+   * @param {File} file - The File object to attach.
+   */
+  addAttachment(taskId, file) {
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) {
+      console.error(`Task not found for adding attachment: ${taskId}`);
+      return;
+    }
+
+    if (!Array.isArray(task.attachments)) {
+      // This should ideally not happen due to constructor migration
+      console.error(`Attachments array missing for task: ${taskId}. Initializing.`);
+      task.attachments = [];
+    }
+
+    const attachment = {
+      id: `att_${Date.now().toString()}_${Math.random().toString(36).substring(2, 7)}`,
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      attachedAt: new Date().toISOString()
+      // Note: We are not storing the file content itself in localStorage
+      // as it's not suitable for large files. This stores metadata.
+    };
+
+    task.attachments.push(attachment);
+    this._logActivity(taskId, 'ATTACHMENT_ADDED', `File "${attachment.fileName}" attached.`);
+    this.saveTasks();
+  }
+
+  /**
+   * Deletes a file attachment from a task.
+   * @param {string} taskId - The ID of the task.
+   * @param {string} attachmentId - The ID of the attachment to delete.
+   */
+  deleteAttachment(taskId, attachmentId) {
+    const task = this.tasks.find(t => t.id === taskId);
+    if (!task) {
+      console.error(`Task not found for deleting attachment: ${taskId}`);
+      return;
+    }
+
+    if (!Array.isArray(task.attachments)) {
+      console.error(`Attachments array missing or not an array for task: ${taskId}.`);
+      return;
+    }
+
+    const attachmentIndex = task.attachments.findIndex(att => att.id === attachmentId);
+    if (attachmentIndex === -1) {
+      console.error(`Attachment with ID ${attachmentId} not found in task ${taskId}.`);
+      return;
+    }
+
+    const deletedAttachment = task.attachments[attachmentIndex]; // Get ref before splice
+    task.attachments.splice(attachmentIndex, 1);
+
+    this._logActivity(taskId, 'ATTACHMENT_REMOVED', `File "${deletedAttachment.fileName}" removed.`);
+    this.saveTasks();
   }
 }
 
