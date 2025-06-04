@@ -78,6 +78,7 @@ class TaskManager {
         }
       });
       this.saveTasks(); // Save these default tasks
+       this.renderAllTasks(); // Explicitly render all tasks after defaults are set and saved
     } else if (this.tasks.length === 0 && (JSON.parse(localStorage.getItem(this.tasksKey)) || []).length === 0) {
       // If current tasks in memory are empty AND localStorage is empty (or contains empty array string)
       // This can happen if user clears all tasks for all boards.
@@ -91,15 +92,19 @@ class TaskManager {
         }
       });
       this.saveTasks();
+       this.renderAllTasks(); // Explicitly render all tasks
     }
   }
 
   /**
-   * Saves tasks to localStorage using the user-specific key and re-renders all tasks, then applies styling.
+   * Saves tasks to localStorage using the user-specific key and applies styling.
+   * Note: This method no longer calls renderAllTasks(). Rendering should be handled
+   * by the calling method if a full re-render is needed, or preferably, specific DOM
+   * updates should be made by the calling method.
    */
   saveTasks() {
     localStorage.setItem(this.tasksKey, JSON.stringify(this.tasks));
-    this.renderAllTasks();
+    // this.renderAllTasks(); // Removed: Callers should handle specific DOM updates or full renders.
     if (this.uiManager && typeof this.uiManager.applyTaskStyling === 'function') {
       this.uiManager.applyTaskStyling();
     }
@@ -318,6 +323,17 @@ class TaskManager {
     };
     this.tasks.push(newTask);
     this._logActivity(newTask.id, 'TASK_CREATED', 'Task was created.');
+
+    // Render the new task directly to the DOM
+    const taskLists = document.querySelectorAll('.task-list');
+    if (columnIndex >= 0 && columnIndex < taskLists.length) {
+      const targetColumnElement = taskLists[columnIndex];
+      this.renderTask(newTask, targetColumnElement);
+    } else {
+      console.warn(`Attempted to add task to an invalid column index: ${columnIndex}. Task data saved, but not rendered to a specific column.`);
+      // Fallback: a full re-render might be needed if task isn't in a visible column,
+      // or handle this case based on application logic. For now, just saving.
+    }
     this.saveTasks();
   }
 
@@ -359,6 +375,19 @@ class TaskManager {
         this._logActivity(taskId, 'FIELD_UPDATED', `Assignee changed from "${originalTask.assignee || 'none'}" to "${this.tasks[taskIndex].assignee || 'none'}".`);
       }
 
+      // Update the specific task in the DOM
+      const taskElement = document.getElementById(`task-${taskId}`);
+      if (taskElement && taskElement.parentElement) {
+        const parentColumn = taskElement.parentElement;
+        taskElement.remove();
+        this.renderTask(this.tasks[taskIndex], parentColumn);
+      } else {
+        // If element not found, a full re-render might be needed as a fallback.
+        // For now, we'll rely on saveTasks possibly triggering global styling,
+        // but ideally, the element should always be found if the task exists.
+        console.warn(`Task element task-${taskId} not found for DOM update. A full re-render might be needed if UI becomes inconsistent.`);
+        // Consider calling this.renderAllTasks() here if critical, but trying to avoid.
+      }
       this.saveTasks();
     }
   }
@@ -371,7 +400,19 @@ class TaskManager {
     if (!confirm('Are you sure you want to delete this task?')) return;
     const taskIndex = this.tasks.findIndex(task => task.id === taskId);
     if (taskIndex !== -1) {
+      // Log activity before splicing, so task data is available if needed for log details
+      // Example: this._logActivity(taskId, 'TASK_DELETED', `Task "${this.tasks[taskIndex].title}" was deleted.`);
+      // For now, no specific log detail is captured that needs the task data before splice.
+
       this.tasks.splice(taskIndex, 1);
+
+      // Remove the task element from the DOM
+      const taskElement = document.getElementById(`task-${taskId}`);
+      if (taskElement) {
+        taskElement.remove();
+      } else {
+        console.warn(`Task element task-${taskId} not found for DOM removal. A full re-render might be needed if UI becomes inconsistent.`);
+      }
       this.saveTasks();
     }
   }
@@ -597,30 +638,52 @@ class TaskManager {
       if (taskElement.classList.contains('dragging')) {
         e.preventDefault();
         const touch = e.changedTouches[0];
+        // Determine the element/column below the touch point
         const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
-        const column = elemBelow?.closest('.task-list');
-        if (column) {
-          const taskId = taskElement.dataset.taskId;
-          const taskIndex = this.tasks.findIndex(t => t.id === taskId);
-          if (taskIndex !== -1) {
-            const newColumnIndex = Number.parseInt(column.dataset.index, 10);
-            if (this.tasks[taskIndex].column !== newColumnIndex) {
-              this.tasks[taskIndex].column = newColumnIndex;
-               // No need to manually move the element, renderAllTasks will handle it
-              this.saveTasks(); // This will re-render all tasks
-            } else {
-              // If the column hasn't changed, just ensure it's in the right place
-              column.appendChild(taskElement); // Or some other logic to ensure correct order
-              dragDropManager.handleDragEnd(taskElement); // Still call dragEnd
-            }
-          } else {
-             dragDropManager.handleDragEnd(taskElement); // Task not found, end drag
-          }
-        } else {
-          // If not dropped on a valid column, end the drag operation
-          dragDropManager.handleDragEnd(taskElement);
+        const newColumnElement = elemBelow?.closest('.task-list');
+        const taskId = taskElement.dataset.taskId;
+        const taskIndex = this.tasks.findIndex(t => t.id === taskId);
+
+        if (taskIndex === -1) {
+            dragDropManager.handleDragEnd(taskElement);
+            return;
         }
-        // dragDropManager.handleDragEnd(taskElement); // Moved this call to be more conditional
+
+        let columnChanged = false;
+        if (newColumnElement) {
+            const oldColumnIndex = this.tasks[taskIndex].column;
+            const newColumnIndex = Number.parseInt(newColumnElement.dataset.index, 10);
+
+            if (oldColumnIndex !== newColumnIndex) {
+                // Column changed: Update data, move DOM element
+                this.tasks[taskIndex].column = newColumnIndex;
+                newColumnElement.appendChild(taskElement); // Move to new column's DOM
+                columnChanged = true;
+                // Note: Task array reordering for touch is simplified here.
+                // DragDropManager's 'drop' event has more robust array reordering for mouse.
+                // For touch, we primarily handle the column data change and DOM move.
+                // A more complete solution would replicate DragDropManager's array reordering here.
+            } else {
+                // Dropped in the same column.
+                // Attempt to insert based on placeholder position.
+                const placeholder = newColumnElement.querySelector('.task-placeholder');
+                if (placeholder) {
+                    newColumnElement.insertBefore(taskElement, placeholder);
+                } else {
+                    // Fallback: append if no placeholder (should ideally not happen if touchmove worked)
+                    newColumnElement.appendChild(taskElement);
+                }
+                // Placeholder should be removed by handleDragEnd or here.
+                // dragDropManager.clearPlaceholders(); // Or rely on handleDragEnd
+            }
+
+            // If column changed or dropped in a valid column, save tasks.
+            // The DragDropManager.drop method also calls saveTasks.
+            // We call it here to ensure data (like new column index) is saved for touch events.
+            this.saveTasks();
+        }
+        // Always clean up drag state (removes placeholder, resets opacity, etc.)
+        dragDropManager.handleDragEnd(taskElement);
       }
     });
 
@@ -681,7 +744,8 @@ class TaskManager {
     // Ensure tasks maintain their original column index after sorting
     // This is implicitly handled by filtering and spreading, but good to be mindful of.
     
-    this.saveTasks(); // This will re-render the tasks in sorted order.
+    this.saveTasks();
+    this.renderAllTasks(); // Explicitly re-render all tasks to reflect sorting in the UI.
   }
 
   /**
@@ -708,6 +772,16 @@ class TaskManager {
     };
     parentTask.subtasks.push(newSubtask);
     this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${newSubtask.title}" added.`);
+
+    // Re-render the parent task card to reflect subtask changes
+    const taskElement = document.getElementById(`task-${parentTaskId}`);
+    if (taskElement && taskElement.parentElement) {
+      const parentColumn = taskElement.parentElement;
+      taskElement.remove();
+      this.renderTask(parentTask, parentColumn);
+    } else {
+      console.warn(`Parent task element task-${parentTaskId} not found for DOM update after subtask change.`);
+    }
     this.saveTasks();
   }
 
@@ -733,6 +807,16 @@ class TaskManager {
     const originalSubtaskTitle = subtask.title;
     subtask.title = newTitle;
     this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${originalSubtaskTitle}" title changed to "${newTitle}".`);
+
+    // Re-render the parent task card
+    const taskElement = document.getElementById(`task-${parentTaskId}`);
+    if (taskElement && taskElement.parentElement) {
+      const parentColumn = taskElement.parentElement;
+      taskElement.remove();
+      this.renderTask(parentTask, parentColumn);
+    } else {
+      console.warn(`Parent task element task-${parentTaskId} not found for DOM update after subtask change.`);
+    }
     this.saveTasks();
   }
 
@@ -756,6 +840,16 @@ class TaskManager {
 
     subtask.completed = !subtask.completed;
     this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${subtask.title}" marked as ${subtask.completed ? 'complete' : 'incomplete'}.`);
+
+    // Re-render the parent task card
+    const taskElement = document.getElementById(`task-${parentTaskId}`);
+    if (taskElement && taskElement.parentElement) {
+      const parentColumn = taskElement.parentElement;
+      taskElement.remove();
+      this.renderTask(parentTask, parentColumn);
+    } else {
+      console.warn(`Parent task element task-${parentTaskId} not found for DOM update after subtask change.`);
+    }
     this.saveTasks();
   }
 
@@ -775,6 +869,16 @@ class TaskManager {
     parentTask.subtasks = parentTask.subtasks.filter(sub => sub.id !== subtaskId);
     if (subtaskToDelete) {
       this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${subtaskToDelete.title}" deleted.`);
+    }
+
+    // Re-render the parent task card
+    const taskElement = document.getElementById(`task-${parentTaskId}`);
+    if (taskElement && taskElement.parentElement) {
+      const parentColumn = taskElement.parentElement;
+      taskElement.remove();
+      this.renderTask(parentTask, parentColumn);
+    } else {
+      console.warn(`Parent task element task-${parentTaskId} not found for DOM update after subtask change.`);
     }
     this.saveTasks();
   }

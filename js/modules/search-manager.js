@@ -34,7 +34,7 @@ class SearchManager {
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           input.value = '';
-          this.taskManager.renderAllTasks();
+          this.taskManager.searchTasks(''); // Clears the search term and renders filtered (all) tasks
         }
       });
     };
