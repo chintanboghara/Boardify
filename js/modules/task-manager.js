@@ -7,8 +7,9 @@ import { defaultTasks } from './constants'; // Import defaultTasks
  * deletion, searching, rendering, and sorting of tasks.
  */
 class TaskManager {
-  constructor(userId) { // Accept userId
+  constructor(userId, boardManager) { // Accept userId and boardManager
     this.userId = userId;
+    this.boardManager = boardManager; // Store boardManager instance
     this.tasksKey = this.userId ? `tasks_${this.userId}` : 'tasks_guest'; // tasks_guest for null userId
 
     // Load tasks from localStorage or initialize with an empty array.
@@ -499,7 +500,7 @@ class TaskManager {
 
     // Due date styling
     let isOverdue = false; // This will determine the text color of the due date
-    const boardManager = window.boardManager; // Access boardManager globally for column titles
+    const boardManager = this.boardManager; // Access boardManager via instance property
 
     // Remove any existing due date styling classes first to handle updates correctly
     taskElement.classList.remove(
