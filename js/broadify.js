@@ -87,7 +87,138 @@ class Boardify {
    */
   attachGlobalEvents() {
     this.themeManager.attachEvents();
-    this.uiManager.attachGlobalEvents();
+    this.uiManager.attachGlobalEvents(); // UIManager attaches its own global events
+
+    // Add event listener for the export button
+    if (this.uiManager && this.uiManager.exportDataBtn) {
+      this.uiManager.exportDataBtn.addEventListener('click', () => this.exportData());
+    }
+
+    // Add event listeners for import button and file input
+    if (this.uiManager && this.uiManager.importDataBtn && this.uiManager.importFileInput) {
+      this.uiManager.importDataBtn.addEventListener('click', () => {
+        this.uiManager.importFileInput.click(); // Trigger hidden file input
+      });
+
+      this.uiManager.importFileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+          return;
+        }
+        if (file.type !== 'application/json') {
+          alert("Import failed: Please select a valid JSON file.");
+          event.target.value = null; // Reset file input
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const jsonData = JSON.parse(e.target.result);
+            this.importData(jsonData);
+          } catch (error) {
+            console.error("Error parsing imported JSON:", error);
+            alert("Import failed: Could not parse the JSON file.");
+          } finally {
+            event.target.value = null; // Reset file input
+          }
+        };
+        reader.onerror = () => {
+          console.error("Error reading file for import.");
+          alert("Import failed: Could not read the selected file.");
+          event.target.value = null; // Reset file input
+        };
+        reader.readAsText(file);
+      });
+    }
+    }
+  }
+
+  importData(jsonData) {
+    // Basic validation
+    if (!jsonData || typeof jsonData !== 'object' || !Array.isArray(jsonData.boards) || !Array.isArray(jsonData.tasks)) {
+      console.error("Invalid data structure for import.", jsonData);
+      alert("Import failed: Invalid file format or data structure.");
+      return false;
+    }
+
+    // Confirmation from user (CRITICAL)
+    if (!confirm("Importing will replace all current boards and tasks. Are you sure you want to proceed? This action cannot be undone.")) {
+      return false;
+    }
+
+    try {
+      this.boardManager.boards = jsonData.boards;
+      this.taskManager.tasks = jsonData.tasks;
+
+      // Perform data migration for tasks
+      this.taskManager.tasks.forEach(task => {
+        if (task.isArchived === undefined) {
+          task.isArchived = false;
+        }
+        if (!Array.isArray(task.subtasks)) {
+          task.subtasks = [];
+        }
+        if (!Array.isArray(task.activityLog)) {
+          task.activityLog = [];
+        }
+        if (!Array.isArray(task.attachments)) {
+          task.attachments = [];
+        }
+        // Add any other necessary migrations for task properties here
+      });
+
+      this.boardManager.saveBoards();
+      this.taskManager.saveTasks();
+
+      alert("Data imported successfully! The application will now refresh to display the new data.");
+      window.location.reload();
+
+      return true;
+
+    } catch (error) {
+      console.error("Error importing data:", error);
+      alert("Import failed. See console for details.");
+      return false;
+    }
+  }
+
+  exportData() {
+    try {
+      const dataToExport = {
+        boards: this.boardManager.boards,
+        tasks: this.taskManager.getTasks(),
+        exportedAt: new Date().toISOString()
+      };
+
+      const jsonData = JSON.stringify(dataToExport, null, 2);
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+
+      const date = new Date();
+      const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      a.download = `boardify_data_${dateString}.json`;
+
+      a.href = url;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      console.log("Data exported successfully.");
+      // Optional: Show success notification via UIManager
+      // if (this.uiManager && typeof this.uiManager.showNotification === 'function') {
+      //   this.uiManager.showNotification('Data exported successfully!', 'success');
+      // }
+
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      // Optional: Show error notification via UIManager
+      // if (this.uiManager && typeof this.uiManager.showNotification === 'function') {
+      //   this.uiManager.showNotification('Error exporting data. See console for details.', 'error');
+      // }
+    }
   }
 
   /**
@@ -97,6 +228,104 @@ class Boardify {
   autoScrollOnDrag(event) {
     if (this.dragDropManager && typeof this.dragDropManager.autoScrollOnDrag === 'function') {
       this.dragDropManager.autoScrollOnDrag(event);
+    }
+  }
+
+  handleKeyboardShortcuts(e) {
+    const targetTagName = e.target.tagName.toLowerCase();
+    const isGeneralInputFocused = (targetTagName === 'input' && e.target.type !== 'checkbox' && e.target.type !== 'radio' && e.target.type !== 'button' && e.target.type !== 'submit' && e.target.type !== 'color' && e.target.type !== 'file') ||
+                                    targetTagName === 'textarea' ||
+                                    e.target.isContentEditable;
+
+    // Escape key - Universal close/cancel
+    if (e.key === 'Escape') {
+      // Check for active modals first
+      if (this.uiManager && this.uiManager.taskModal && !this.uiManager.taskModal.classList.contains('hidden')) {
+        this.taskManager.hideTaskModal();
+        e.preventDefault();
+        return;
+      }
+      if (this.uiManager && this.uiManager.editBoardModal && !this.uiManager.editBoardModal.classList.contains('hidden')) {
+        this.boardManager.hideEditBoardModal();
+        e.preventDefault();
+        return;
+      }
+      if (this.uiManager && this.uiManager.archivedTasksModal && !this.uiManager.archivedTasksModal.classList.contains('hidden')) {
+        this.uiManager.hideArchivedTasksModal();
+        e.preventDefault();
+        return;
+      }
+
+      const searchInput = this.uiManager.searchInput;
+      const searchInputMob = this.uiManager.searchInputMob;
+
+      if (document.activeElement === searchInput && searchInput.value) {
+        searchInput.value = '';
+        this.taskManager.searchTasks('');
+        e.preventDefault();
+        return;
+      }
+      if (document.activeElement === searchInputMob && searchInputMob.value) {
+        searchInputMob.value = '';
+        this.taskManager.searchTasks('');
+        e.preventDefault();
+        return;
+      }
+      if (document.activeElement === searchInput || document.activeElement === searchInputMob) {
+          document.activeElement.blur();
+          e.preventDefault();
+          return;
+      }
+      return;
+    }
+
+    // Ctrl+Enter or Cmd+Enter for saving task in modal
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      if (this.uiManager && this.uiManager.taskModal && !this.uiManager.taskModal.classList.contains('hidden') &&
+          this.uiManager.taskModal.contains(document.activeElement)) {
+        this.taskManager.handleTaskFormSubmit();
+        e.preventDefault();
+        return;
+      }
+    }
+
+    if (isGeneralInputFocused) {
+      if (e.key === '/' && (targetTagName !== 'input' || e.target.type === 'search') && targetTagName !== 'textarea' && !e.target.isContentEditable) {
+        // Allow / to proceed to focus search
+      } else {
+           return;
+      }
+    }
+
+    // Shift+A: Add New Task
+    if (e.shiftKey && e.key.toUpperCase() === 'A') {
+      e.preventDefault();
+      if (this.boardManager.boards && this.boardManager.boards.length > 0) {
+        this.taskManager.openTaskModal(0);
+      } else {
+        if (typeof alert !== 'undefined') alert("Please add a board first before adding tasks.");
+      }
+      return;
+    }
+
+    // /: Focus Search
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      const searchInput = this.uiManager.searchInput;
+      const searchInputMob = this.uiManager.searchInputMob;
+      if (searchInput && (document.activeElement !== searchInput && document.activeElement !== searchInputMob)) {
+        searchInput.focus();
+      } else if (searchInputMob && (document.activeElement !== searchInput && document.activeElement !== searchInputMob)) {
+        searchInputMob.focus();
+      }
+      return;
+    }
+
+    // Shift+V: View Archived Tasks
+    if (e.shiftKey && e.key.toUpperCase() === 'V') {
+      e.preventDefault();
+      if (this.uiManager) this.uiManager.openArchivedTasksModal();
+      return;
     }
   }
 }

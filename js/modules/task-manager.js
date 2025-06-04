@@ -28,6 +28,10 @@ class TaskManager {
       if (!Array.isArray(task.attachments)) {
         task.attachments = [];
       }
+      // Migration for isArchived
+      if (task.isArchived === undefined) {
+        task.isArchived = false;
+      }
     });
     this.filteredTasks = [...this.tasks]; // Update filteredTasks accordingly
     this.editingTaskId = null;
@@ -129,6 +133,8 @@ class TaskManager {
     this.taskModal.classList.add('flex');
     this.taskForm.dataset.targetColumn = index;
 
+    const archiveTaskBtn = document.getElementById('archive-task-modal-btn');
+
     if (task) {
       // Populate form fields with task data for editing.
       this.editingTaskId = task.id;
@@ -226,6 +232,48 @@ class TaskManager {
         activityLogListElement.innerHTML = '';
       }
     }
+
+    // Configure Archive/Unarchive button
+    if (archiveTaskBtn) {
+      if (task && task.id && !task.isArchived) { // Editing an existing, active task
+        archiveTaskBtn.classList.remove('hidden');
+        archiveTaskBtn.innerHTML = '<i class="fas fa-archive mr-1 sm:mr-2"></i> <span class="hidden sm:inline">Archive Task</span><span class="sm:hidden">Archive</span>';
+        archiveTaskBtn.title = 'Archive Task';
+
+        if (archiveTaskBtn._clickHandler) {
+          archiveTaskBtn.removeEventListener('click', archiveTaskBtn._clickHandler);
+        }
+        archiveTaskBtn._clickHandler = () => {
+          if (this.editingTaskId) {
+            this.archiveTask(this.editingTaskId);
+            this.hideTaskModal();
+          }
+        };
+        archiveTaskBtn.addEventListener('click', archiveTaskBtn._clickHandler);
+      } else if (task && task.id && task.isArchived) { // Editing an existing, ARCHIVED task
+        archiveTaskBtn.classList.remove('hidden');
+        archiveTaskBtn.innerHTML = '<i class="fas fa-box-open mr-1 sm:mr-2"></i> <span class="hidden sm:inline">Unarchive Task</span><span class="sm:hidden">Unarchive</span>';
+        archiveTaskBtn.title = 'Unarchive Task';
+
+        if (archiveTaskBtn._clickHandler) {
+          archiveTaskBtn.removeEventListener('click', archiveTaskBtn._clickHandler);
+        }
+        archiveTaskBtn._clickHandler = () => {
+          if (this.editingTaskId) {
+            this.unarchiveTask(this.editingTaskId);
+            this.hideTaskModal();
+            // TODO: Refresh relevant views (archived list, potentially main board)
+          }
+        };
+        archiveTaskBtn.addEventListener('click', archiveTaskBtn._clickHandler);
+      } else { // New task or other cases
+        archiveTaskBtn.classList.add('hidden');
+        if (archiveTaskBtn._clickHandler) {
+          archiveTaskBtn.removeEventListener('click', archiveTaskBtn._clickHandler);
+          archiveTaskBtn._clickHandler = null;
+        }
+      }
+    }
   }
   
   /**
@@ -320,7 +368,8 @@ class TaskManager {
       column: columnIndex,
       subtasks: [],
       activityLog: [],
-      attachments: [] // Add this line
+      attachments: [],
+      isArchived: false // Add isArchived property
     };
     this.tasks.push(newTask);
     this._logActivity(newTask.id, 'TASK_CREATED', 'Task was created.');
@@ -398,14 +447,17 @@ class TaskManager {
    * @param {string} taskId - ID of the task to delete.
    */
   deleteTask(taskId) {
-    if (!confirm('Are you sure you want to delete this task?')) return;
+    // Consider changing the confirmation message in the UI to "delete permanently"
+    if (!confirm('Are you sure you want to permanently delete this task? This action cannot be undone.')) return;
     const taskIndex = this.tasks.findIndex(task => task.id === taskId);
     if (taskIndex !== -1) {
-      // Log activity before splicing, so task data is available if needed for log details
-      // Example: this._logActivity(taskId, 'TASK_DELETED', `Task "${this.tasks[taskIndex].title}" was deleted.`);
-      // For now, no specific log detail is captured that needs the task data before splice.
+      const deletedTaskTitle = this.tasks[taskIndex].title; // Get title before splice
+      const taskToDeleteId = this.tasks[taskIndex].id; // Get ID for logging if needed, as task object won't exist in this.tasks for _logActivity
 
       this.tasks.splice(taskIndex, 1);
+      // Using taskToDeleteId ensures that if _logActivity internally tries to find the task by ID
+      // from this.tasks, it might not find it, but we have all necessary info (ID, Title) for the log string itself.
+      this._logActivity(taskToDeleteId, 'TASK_DELETED_PERMANENTLY', `Task "${deletedTaskTitle}" permanently deleted.`);
 
       // Remove the task element from the DOM
       const taskElement = document.getElementById(`task-${taskId}`);
@@ -419,19 +471,67 @@ class TaskManager {
   }
 
   /**
+   * Archives a task.
+   * @param {string} taskId - The ID of the task to archive.
+   */
+  archiveTask(taskId) {
+    const taskIndex = this.tasks.findIndex(task => task.id === taskId);
+    if (taskIndex !== -1) {
+      this.tasks[taskIndex].isArchived = true;
+      this._logActivity(taskId, 'TASK_ARCHIVED', `Task "${this.tasks[taskIndex].title}" archived.`);
+
+      const taskElement = document.getElementById(`task-${taskId}`);
+      if (taskElement) {
+        taskElement.remove();
+      }
+
+      this.saveTasks();
+    } else {
+      console.warn(`Task with ID ${taskId} not found for archiving.`);
+    }
+  }
+
+  /**
+   * Unarchives a task.
+   * @param {string} taskId - The ID of the task to unarchive.
+   */
+  unarchiveTask(taskId) {
+    const taskIndex = this.tasks.findIndex(task => task.id === taskId);
+    if (taskIndex !== -1) {
+      this.tasks[taskIndex].isArchived = false;
+      this._logActivity(taskId, 'TASK_UNARCHIVED', `Task "${this.tasks[taskIndex].title}" unarchived.`);
+      // Re-rendering of the unarchived task to the board will be handled by the UI
+      // component responsible for displaying the board, after it fetches updated task lists.
+      this.saveTasks();
+    } else {
+      console.warn(`Task with ID ${taskId} not found for unarchiving.`);
+    }
+  }
+
+  /**
+   * Retrieves all archived tasks.
+   * @returns {Array<Object>} An array of tasks where isArchived is true.
+   */
+  getArchivedTasks() {
+    return this.tasks.filter(task => task.isArchived);
+  }
+
+  /**
    * Filters tasks based on a search term and renders the filtered list.
    * @param {string} searchTerm - Term used to filter tasks.
    */
   searchTasks(searchTerm) {
+    const activeTasks = this.tasks.filter(task => !task.isArchived);
     if (!searchTerm || searchTerm.trim() === '') {
-      this.filteredTasks = [...this.tasks];
+      this.filteredTasks = activeTasks;
     } else {
       searchTerm = searchTerm.toLowerCase().trim();
-      this.filteredTasks = this.tasks.filter(task =>
+      this.filteredTasks = activeTasks.filter(task =>
         task.title.toLowerCase().includes(searchTerm)
+        // Consider if other fields should be searchable, e.g., description
       );
     }
-    this.renderFilteredTasks();
+    this.renderFilteredTasks(); // This will render based on the now-filtered active tasks
   }
 
   /**
@@ -455,18 +555,10 @@ class TaskManager {
    * Renders all tasks.
    */
   renderAllTasks() {
-    this.filteredTasks = [...this.tasks];
-    const taskLists = document.querySelectorAll('.task-list');
-    taskLists.forEach(list => (list.innerHTML = ''));
-    this.tasks.forEach(task => {
-      const columnIndex = task.column;
-      if (columnIndex >= 0 && columnIndex < taskLists.length) {
-        this.renderTask(task, taskLists[columnIndex]);
-      }
-    });
-    if (this.uiManager && typeof this.uiManager.applyTaskStyling === 'function') {
-      this.uiManager.applyTaskStyling();
-    }
+    // Set filteredTasks to all active tasks
+    this.filteredTasks = this.tasks.filter(task => !task.isArchived);
+    // Call renderFilteredTasks to do the actual rendering to the DOM
+    this.renderFilteredTasks();
   }
 
   /**
@@ -580,11 +672,11 @@ class TaskManager {
       ${task.dueDate ? `<p class="text-sm ${isOverdue ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'} mt-1">Due: ${new Date(task.dueDate).toLocaleDateString()}</p>` : ''}
       ${task.assignee ? `<p class="text-gray-600 dark:text-gray-400 break-words line-clamp-3 text-sm mt-1">Assignee: ${task.assignee}</p>` : ''}
       <div class="flex justify-end space-x-2 mt-auto pt-2">
-        <button class="edit-task-btn p-2 text-gray-700 rounded-md transition-all hover:bg-white/20 dark:text-gray-300" data-task-id="${task.id}">
+        <button class="edit-task-btn p-2 text-gray-700 rounded-md transition-all hover:bg-white/20 dark:text-gray-300" data-task-id="${task.id}" title="Edit Task">
           <i class="fas fa-pencil-alt text-sm"></i>
         </button>
-        <button class="delete-task-btn p-2 text-gray-700 rounded-md transition-all hover:bg-white/20 dark:text-gray-300" data-task-id="${task.id}">
-          <i class="fas fa-trash text-sm"></i>
+        <button class="task-card-archive-btn p-2 text-gray-700 rounded-md transition-all hover:bg-white/20 dark:text-gray-300" data-task-id="${task.id}" title="Archive Task">
+          <i class="fas fa-archive text-sm"></i>
         </button>
       </div>
     `;
@@ -762,8 +854,8 @@ class TaskManager {
       this.openTaskModal(task.column, task);
     });
 
-    taskElement.querySelector('.delete-task-btn').addEventListener('click', () => {
-      this.deleteTask(task.id);
+    taskElement.querySelector('.task-card-archive-btn').addEventListener('click', () => {
+      this.archiveTask(task.id);
     });
   }
 
