@@ -1,39 +1,23 @@
 import DragDropManager from './drag-drop-manager.js';
 import { TaskCard } from '../components/TaskCard.js';
-import { defaultTasks } from './constants'; // Import defaultTasks
+import { defaultTasks } from './constants.js';
+import { useTaskStore } from '../store/taskStore.js';
 
 /**
  * Manages tasks for the Boardify application including creation, updating,
  * deletion, searching, rendering, and sorting of tasks.
  */
 class TaskManager {
-  constructor(userId, boardManager) { // Accept userId and boardManager
+  constructor(userId, boardManager) {
     this.userId = userId;
-    this.boardManager = boardManager; // Store boardManager instance
-    this.tasksKey = this.userId ? `tasks_${this.userId}` : 'tasks_guest'; // tasks_guest for null userId
+    this.boardManager = boardManager;
 
-    // Load tasks from localStorage or initialize with an empty array.
-    this.tasks = JSON.parse(localStorage.getItem(this.tasksKey)) || [];
-    // Migration for existing tasks that might not have subtasks array
-    // Migration for existing tasks that might not have subtasks array
-    this.tasks.forEach(task => {
-      if (!Array.isArray(task.subtasks)) { // Check if it's not an array (covers undefined or wrong type)
-        task.subtasks = [];
-      }
-      // Migration for activityLog
-      if (!Array.isArray(task.activityLog)) {
-        task.activityLog = [];
-      }
-      // Migration for attachments
-      if (!Array.isArray(task.attachments)) {
-        task.attachments = [];
-      }
-      // Migration for isArchived
-      if (task.isArchived === undefined) {
-        task.isArchived = false;
-      }
-    });
-    this.filteredTasks = [...this.tasks]; // Update filteredTasks accordingly
+    useTaskStore.getState().loadTasksForUser(this.userId);
+
+    // this.filteredTasks is used by renderFilteredTasks. It will be populated by searchTasks or renderAllTasks.
+    // Initialize it to an empty array or based on initial store state if needed immediately.
+    // For now, renderAllTasks/searchTasks will set it before rendering.
+    this.filteredTasks = [];
     this.editingTaskId = null;
     this.taskModal = null;
     this.taskForm = null;
@@ -55,16 +39,17 @@ class TaskManager {
    * @returns {Array} List of tasks.
    */
   getTasks() {
-    return this.tasks;
+    return useTaskStore.getState().tasks; // Reads directly from the store
   }
 
   /**
-   * Sets the list of tasks and updates the filtered copy.
-   * @param {Array} tasks - New tasks array.
+   * Sets all tasks in the store. Used for operations like data import.
+   * @param {Array} tasksArray - The new array of tasks.
    */
-  setTasks(tasks) {
-    this.tasks = tasks;
-    this.filteredTasks = [...tasks];
+  setTasks(tasksArray) {
+    useTaskStore.getState().setAllTasks(tasksArray);
+    // Rendering methods like renderAllTasks will now pull from the store
+    // and rebuild filteredTasks as needed.
   }
 
   /**
@@ -73,47 +58,26 @@ class TaskManager {
    * and no specific guest tasks are found.
    */
   initializeDefaultTasksForUser() {
-    if (localStorage.getItem(this.tasksKey) === null) {
-      // Only set default tasks if no tasks currently exist for this user/guest.
-      this.tasks = JSON.parse(JSON.stringify(defaultTasks)); // Deep copy to avoid modifying original defaults
-      // Ensure task columns are valid for default boards (0, 1, 2)
-      this.tasks.forEach(task => {
-        if (task.column === undefined || task.column < 0 || task.column > 2) {
-          task.column = 0; // Assign to the first board if column is invalid
-        }
-      });
-      this.saveTasks(); // Save these default tasks
-       this.renderAllTasks(); // Explicitly render all tasks after defaults are set and saved
-    } else if (this.tasks.length === 0 && (JSON.parse(localStorage.getItem(this.tasksKey)) || []).length === 0) {
-      // If current tasks in memory are empty AND localStorage is empty (or contains empty array string)
-      // This can happen if user clears all tasks for all boards.
-      // Consider if default tasks should be re-added here or if an empty state is preferred.
-      // For now, let's re-add default tasks if everything is empty.
-      // This behavior might need adjustment based on desired UX.
-      this.tasks = JSON.parse(JSON.stringify(defaultTasks));
-      this.tasks.forEach(task => {
-        if (task.column === undefined || task.column < 0 || task.column > 2) {
-          task.column = 0;
-        }
-      });
-      this.saveTasks();
-       this.renderAllTasks(); // Explicitly render all tasks
+    const storeState = useTaskStore.getState();
+    // loadTasksForUser has already been called in constructor, setting currentUserId
+    if (storeState.currentUserId === this.userId && storeState.tasks.length > 0) {
+      // Tasks already exist for this user in the store, do nothing.
+      // We might still want to render them if this is part of an initial setup.
+      // this.renderAllTasks(); // Potentially call if UI isn't subscribed yet
+      return;
     }
+
+    const tasksToSet = JSON.parse(JSON.stringify(defaultTasks));
+    tasksToSet.forEach(task => {
+        if (task.column === undefined || task.column < 0 || task.column > 2) {
+            task.column = 0;
+        }
+    });
+    storeState.setAllTasks(tasksToSet); // This handles migration and saving to LS
+    this.renderAllTasks(); // Render the newly set default tasks
   }
 
-  /**
-   * Saves tasks to localStorage using the user-specific key and applies styling.
-   * Note: This method no longer calls renderAllTasks(). Rendering should be handled
-   * by the calling method if a full re-render is needed, or preferably, specific DOM
-   * updates should be made by the calling method.
-   */
-  saveTasks() {
-    localStorage.setItem(this.tasksKey, JSON.stringify(this.tasks));
-    // this.renderAllTasks(); // Removed: Callers should handle specific DOM updates or full renders.
-    if (this.uiManager && typeof this.uiManager.applyTaskStyling === 'function') {
-      this.uiManager.applyTaskStyling();
-    }
-  }
+  // saveTasks() method is removed. Persistence is handled by the store.
 
   /**
    * Opens the task modal for creating or editing a task.
@@ -281,7 +245,7 @@ class TaskManager {
    * @param {string} parentTaskId - The ID of the parent task.
    */
   _renderSubtasks(parentTaskId) {
-    const parentTask = this.tasks.find(t => t.id === parentTaskId);
+    const parentTask = useTaskStore.getState().getTaskById(parentTaskId);
     const subtaskListElement = document.getElementById('subtask-list');
 
     if (!parentTask || !subtaskListElement) {
@@ -369,22 +333,20 @@ class TaskManager {
       subtasks: [],
       activityLog: [],
       attachments: [],
-      isArchived: false // Add isArchived property
+      isArchived: false
     };
-    this.tasks.push(newTask);
+    useTaskStore.getState().addTask(newTask);
     this._logActivity(newTask.id, 'TASK_CREATED', 'Task was created.');
 
-    // Render the new task directly to the DOM
+    // DOM update for the new task (will be store-driven eventually)
     const taskLists = document.querySelectorAll('.task-list');
     if (columnIndex >= 0 && columnIndex < taskLists.length) {
       const targetColumnElement = taskLists[columnIndex];
       this.renderTask(newTask, targetColumnElement);
     } else {
       console.warn(`Attempted to add task to an invalid column index: ${columnIndex}. Task data saved, but not rendered to a specific column.`);
-      // Fallback: a full re-render might be needed if task isn't in a visible column,
-      // or handle this case based on application logic. For now, just saving.
     }
-    this.saveTasks();
+    // No explicit saveTasks() call needed here, store action handles it.
   }
 
   /**
@@ -397,48 +359,50 @@ class TaskManager {
    * @param {string} assignee - New assignee.
    */
   updateTask(taskId, title, description, priority, dueDate, assignee) {
-    const taskIndex = this.tasks.findIndex(task => task.id === taskId);
-    if (taskIndex !== -1) {
-      const originalTask = JSON.parse(JSON.stringify(this.tasks[taskIndex]));
-      this.tasks[taskIndex] = {
-        ...this.tasks[taskIndex],
+    const taskToUpdate = useTaskStore.getState().getTaskById(taskId);
+    if (taskToUpdate) {
+      // Important: Log activity based on the task *before* updates for accurate "from X to Y"
+      const originalTaskForLog = { ...taskToUpdate }; // Shallow copy for logging
+
+      const updates = {
         title,
         description,
         priority,
         dueDate,
         assignee,
       };
+      useTaskStore.getState().updateTask(taskId, updates);
 
-      if (originalTask.title !== this.tasks[taskIndex].title) {
-        this._logActivity(taskId, 'FIELD_UPDATED', `Title changed from "${originalTask.title}" to "${this.tasks[taskIndex].title}".`);
+      // Log field changes by comparing with the state before update
+      const updatedTaskForLog = useTaskStore.getState().getTaskById(taskId); // Get the task after update for "to Y" part
+
+      if (originalTaskForLog.title !== updatedTaskForLog.title) {
+        this._logActivity(taskId, 'FIELD_UPDATED', `Title changed from "${originalTaskForLog.title}" to "${updatedTaskForLog.title}".`);
       }
-      if (originalTask.description !== this.tasks[taskIndex].description) {
+      if (originalTaskForLog.description !== updatedTaskForLog.description) {
         this._logActivity(taskId, 'FIELD_UPDATED', `Description updated.`);
       }
-      if (originalTask.priority !== this.tasks[taskIndex].priority) {
-        this._logActivity(taskId, 'FIELD_UPDATED', `Priority changed from "${originalTask.priority}" to "${this.tasks[taskIndex].priority}".`);
+      if (originalTaskForLog.priority !== updatedTaskForLog.priority) {
+        this._logActivity(taskId, 'FIELD_UPDATED', `Priority changed from "${originalTaskForLog.priority}" to "${updatedTaskForLog.priority}".`);
       }
-      if (originalTask.dueDate !== this.tasks[taskIndex].dueDate) {
-        this._logActivity(taskId, 'FIELD_UPDATED', `Due date changed from "${originalTask.dueDate || 'none'}" to "${this.tasks[taskIndex].dueDate || 'none'}".`);
+      if (originalTaskForLog.dueDate !== updatedTaskForLog.dueDate) {
+        this._logActivity(taskId, 'FIELD_UPDATED', `Due date changed from "${originalTaskForLog.dueDate || 'none'}" to "${updatedTaskForLog.dueDate || 'none'}".`);
       }
-      if (originalTask.assignee !== this.tasks[taskIndex].assignee) {
-        this._logActivity(taskId, 'FIELD_UPDATED', `Assignee changed from "${originalTask.assignee || 'none'}" to "${this.tasks[taskIndex].assignee || 'none'}".`);
+      if (originalTaskForLog.assignee !== updatedTaskForLog.assignee) {
+        this._logActivity(taskId, 'FIELD_UPDATED', `Assignee changed from "${originalTaskForLog.assignee || 'none'}" to "${updatedTaskForLog.assignee || 'none'}".`);
       }
 
-      // Update the specific task in the DOM
+      // DOM update (for now, will be store-driven eventually)
       const taskElement = document.getElementById(`task-${taskId}`);
       if (taskElement && taskElement.parentElement) {
         const parentColumn = taskElement.parentElement;
         taskElement.remove();
-        this.renderTask(this.tasks[taskIndex], parentColumn);
+        this.renderTask(updatedTaskForLog, parentColumn); // Render with the updated task data
       } else {
-        // If element not found, a full re-render might be needed as a fallback.
-        // For now, we'll rely on saveTasks possibly triggering global styling,
-        // but ideally, the element should always be found if the task exists.
-        console.warn(`Task element task-${taskId} not found for DOM update. A full re-render might be needed if UI becomes inconsistent.`);
-        // Consider calling this.renderAllTasks() here if critical, but trying to avoid.
+        console.warn(`Task element task-${taskId} not found for DOM update.`);
       }
-      this.saveTasks();
+    } else {
+      console.warn(`Task with ID ${taskId} not found for update.`);
     }
   }
 
@@ -447,26 +411,23 @@ class TaskManager {
    * @param {string} taskId - ID of the task to delete.
    */
   deleteTask(taskId) {
-    // Consider changing the confirmation message in the UI to "delete permanently"
     if (!confirm('Are you sure you want to permanently delete this task? This action cannot be undone.')) return;
-    const taskIndex = this.tasks.findIndex(task => task.id === taskId);
-    if (taskIndex !== -1) {
-      const deletedTaskTitle = this.tasks[taskIndex].title; // Get title before splice
-      const taskToDeleteId = this.tasks[taskIndex].id; // Get ID for logging if needed, as task object won't exist in this.tasks for _logActivity
 
-      this.tasks.splice(taskIndex, 1);
-      // Using taskToDeleteId ensures that if _logActivity internally tries to find the task by ID
-      // from this.tasks, it might not find it, but we have all necessary info (ID, Title) for the log string itself.
-      this._logActivity(taskToDeleteId, 'TASK_DELETED_PERMANENTLY', `Task "${deletedTaskTitle}" permanently deleted.`);
+    const taskToDelete = useTaskStore.getState().getTaskById(taskId);
+    if (taskToDelete) {
+      const deletedTaskTitle = taskToDelete.title;
+      // Important: Log activity using the task ID from taskToDelete, as _logActivity might try to find the task in the current state
+      this._logActivity(taskToDelete.id, 'TASK_DELETED_PERMANENTLY', `Task "${deletedTaskTitle}" permanently deleted.`);
+      useTaskStore.getState().deleteTask(taskId); // This will remove it from the store and persist
 
-      // Remove the task element from the DOM
       const taskElement = document.getElementById(`task-${taskId}`);
       if (taskElement) {
         taskElement.remove();
       } else {
-        console.warn(`Task element task-${taskId} not found for DOM removal. A full re-render might be needed if UI becomes inconsistent.`);
+        console.warn(`Task element task-${taskId} not found for DOM removal.`);
       }
-      this.saveTasks();
+    } else {
+      console.warn(`Task with ID ${taskId} not found for deletion.`);
     }
   }
 
@@ -475,17 +436,17 @@ class TaskManager {
    * @param {string} taskId - The ID of the task to archive.
    */
   archiveTask(taskId) {
-    const taskIndex = this.tasks.findIndex(task => task.id === taskId);
-    if (taskIndex !== -1) {
-      this.tasks[taskIndex].isArchived = true;
-      this._logActivity(taskId, 'TASK_ARCHIVED', `Task "${this.tasks[taskIndex].title}" archived.`);
+    const taskToArchive = useTaskStore.getState().getTaskById(taskId);
+    if (taskToArchive) {
+      useTaskStore.getState().archiveTask(taskId, true);
+      this._logActivity(taskId, 'TASK_ARCHIVED', `Task "${taskToArchive.title}" archived.`);
 
       const taskElement = document.getElementById(`task-${taskId}`);
       if (taskElement) {
         taskElement.remove();
       }
 
-      this.saveTasks();
+      // No explicit saveTasks() call needed here.
     } else {
       console.warn(`Task with ID ${taskId} not found for archiving.`);
     }
@@ -496,13 +457,13 @@ class TaskManager {
    * @param {string} taskId - The ID of the task to unarchive.
    */
   unarchiveTask(taskId) {
-    const taskIndex = this.tasks.findIndex(task => task.id === taskId);
-    if (taskIndex !== -1) {
-      this.tasks[taskIndex].isArchived = false;
-      this._logActivity(taskId, 'TASK_UNARCHIVED', `Task "${this.tasks[taskIndex].title}" unarchived.`);
+    const taskToUnarchive = useTaskStore.getState().getTaskById(taskId);
+    if (taskToUnarchive) {
+      useTaskStore.getState().archiveTask(taskId, false); // Store handles unarchive
+      this._logActivity(taskId, 'TASK_UNARCHIVED', `Task "${taskToUnarchive.title}" unarchived.`);
       // Re-rendering of the unarchived task to the board will be handled by the UI
       // component responsible for displaying the board, after it fetches updated task lists.
-      this.saveTasks();
+      // No explicit saveTasks() call needed here.
     } else {
       console.warn(`Task with ID ${taskId} not found for unarchiving.`);
     }
@@ -513,7 +474,7 @@ class TaskManager {
    * @returns {Array<Object>} An array of tasks where isArchived is true.
    */
   getArchivedTasks() {
-    return this.tasks.filter(task => task.isArchived);
+    return useTaskStore.getState().tasks.filter(task => task.isArchived);
   }
 
   /**
@@ -521,7 +482,8 @@ class TaskManager {
    * @param {string} searchTerm - Term used to filter tasks.
    */
   searchTasks(searchTerm) {
-    const activeTasks = this.tasks.filter(task => !task.isArchived);
+    const allTasksFromStore = useTaskStore.getState().tasks;
+    const activeTasks = allTasksFromStore.filter(task => !task.isArchived);
     if (!searchTerm || searchTerm.trim() === '') {
       this.filteredTasks = activeTasks;
     } else {
@@ -555,9 +517,8 @@ class TaskManager {
    * Renders all tasks.
    */
   renderAllTasks() {
-    // Set filteredTasks to all active tasks
-    this.filteredTasks = this.tasks.filter(task => !task.isArchived);
-    // Call renderFilteredTasks to do the actual rendering to the DOM
+    const allTasksFromStore = useTaskStore.getState().tasks;
+    this.filteredTasks = allTasksFromStore.filter(task => !task.isArchived);
     this.renderFilteredTasks();
   }
 
@@ -708,107 +669,48 @@ class TaskManager {
         const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
         const newColumnElement = elemBelow?.closest('.task-list');
         const taskId = taskElement.dataset.taskId;
+        const taskToMove = useTaskStore.getState().getTaskById(taskId);
 
-        const originalTaskIndexInArray = this.tasks.findIndex(t => t.id === taskId);
-
-        if (originalTaskIndexInArray === -1) {
+        if (!taskToMove) {
             dragDropManager.handleDragEnd(taskElement);
-            console.warn(`Task with ID ${taskId} not found in data array during touchend.`);
+            console.warn(`Task with ID ${taskId} not found in store during touchend.`);
             return;
         }
-        const taskToMove = this.tasks[originalTaskIndexInArray];
 
         if (newColumnElement) {
             const oldColumnIndex = taskToMove.column;
             const newColumnIndex = Number.parseInt(newColumnElement.dataset.index, 10);
 
-            // DOM Manipulation: Move taskElement to its new visual position
+            // DOM Manipulation (already done by this point or handled by placeholder logic)
             if (oldColumnIndex !== newColumnIndex) {
-                newColumnElement.appendChild(taskElement);
+                 newColumnElement.appendChild(taskElement); // Ensure it's in the new column DOM
             } else {
                 const placeholder = newColumnElement.querySelector('.task-placeholder');
                 if (placeholder) {
                     newColumnElement.insertBefore(taskElement, placeholder);
                 } else {
-                    newColumnElement.appendChild(taskElement); // Fallback
+                     newColumnElement.appendChild(taskElement); // Fallback
                 }
             }
             if (newColumnElement.querySelector('.task-placeholder')) {
               newColumnElement.querySelector('.task-placeholder').remove();
             }
 
-
             // Data Update
-            taskToMove.column = newColumnIndex; // Update column first
-
-            // Remove from old position in data array
-            this.tasks.splice(originalTaskIndexInArray, 1);
-
-            // Get new DOM order in the target column
-            const tasksInNewColumnDomOrder = Array.from(newColumnElement.querySelectorAll('.task:not(.task-placeholder)'))
-                                              .map(el => el.dataset.taskId);
-
-            let insertIndex = -1;
-            const positionInDomColumn = tasksInNewColumnDomOrder.indexOf(taskId);
-
-            if (positionInDomColumn === -1) {
-                // Should not happen if taskElement was just added to newColumnElement
-                console.error('Error: Dragged task not found in its new DOM column after move.');
-                // Fallback: add to end of current tasks for this column, or just end of array
-                this.tasks.push(taskToMove); // Simplistic fallback
-            } else if (tasksInNewColumnDomOrder.length === 1) {
-                // Task is the only one in its new DOM column. Find where this column's tasks should start.
-                let targetIdx = 0;
-                for (let i = 0; i < this.tasks.length; i++) {
-                    if (this.tasks[i].column >= newColumnIndex) {
-                        targetIdx = i;
-                        break;
-                    }
-                    targetIdx = i + 1;
-                }
-                insertIndex = targetIdx;
-            } else if (positionInDomColumn === tasksInNewColumnDomOrder.length - 1) {
-                // Task is the last in its new DOM column.
-                // Find the index of the last task in `this.tasks` (that's not taskToMove) belonging to newColumnIndex.
-                let lastIndexOfSameColumn = -1;
-                for (let i = this.tasks.length - 1; i >= 0; i--) {
-                    if (this.tasks[i].column === newColumnIndex) {
-                        lastIndexOfSameColumn = i;
-                        break;
-                    }
-                }
-                if (lastIndexOfSameColumn !== -1) {
-                    insertIndex = lastIndexOfSameColumn + 1;
-                } else {
-                    // If no other tasks in this column, find where this column's tasks should start
-                    let targetIdx = 0;
-                    for (let i = 0; i < this.tasks.length; i++) {
-                        if (this.tasks[i].column >= newColumnIndex) {
-                            targetIdx = i;
-                            break;
-                        }
-                        targetIdx = i + 1;
-                    }
-                    insertIndex = targetIdx;
-                }
+            if (oldColumnIndex !== newColumnIndex) {
+                useTaskStore.getState().updateTask(taskId, { column: newColumnIndex });
+                // Full reordering for D&D is complex and will be handled by DragDropManager calling a store action.
+                // For simple touch-based column change, just updating the column is a first step.
+                // The store does not yet have a "reorderTaskInColumn" action.
+                // This means task order within the new column in the data array might not match DOM yet.
             } else {
-                // Task is in the middle. Find the task that comes after it in the DOM.
-                const nextTaskInDomId = tasksInNewColumnDomOrder[positionInDomColumn + 1];
-                const nextTaskInArrayIndex = this.tasks.findIndex(t => t.id === nextTaskInDomId);
-                if (nextTaskInArrayIndex !== -1) {
-                    insertIndex = nextTaskInArrayIndex;
-                } else {
-                     // Fallback if next task in DOM not found in current data array (should be rare)
-                    console.warn(`Next task ID ${nextTaskInDomId} not found in data array. Appending dragged task.`);
-                    insertIndex = this.tasks.length;
-                }
+                // Task dropped in the same column.
+                // Get DOM order and tell the store to reorder.
+                // This requires a new store action like `reorderTasks(orderedTaskIds, newColumnIndex)`
+                // For now, this part won't update the store's internal order perfectly for same-column touch drops.
+                // We'll call updateTask just to trigger a save if any other property were to change.
+                useTaskStore.getState().updateTask(taskId, { ...taskToMove }); // Effectively just triggers a save
             }
-
-            if (insertIndex === -1) { // Final fallback if something went wrong
-                insertIndex = this.tasks.length;
-            }
-            this.tasks.splice(insertIndex, 0, taskToMove);
-            this.saveTasks();
         }
         dragDropManager.handleDragEnd(taskElement);
       }
@@ -835,39 +737,47 @@ class TaskManager {
    * @param {string} direction - Sort direction ('asc' or 'desc').
    */
   sortTasks(boardIndex, sortBy, direction) {
-    // Make sure boardManager is available if needed for sorting logic that depends on board properties
-    // const boardManager = window.boardManager; 
+    const allTasks = [...useTaskStore.getState().tasks]; // Get a mutable copy
+    const tasksInBoard = allTasks.filter(task => task.column === boardIndex);
+    const otherTasks = allTasks.filter(task => task.column !== boardIndex);
 
-    const boardTasks = this.tasks.filter(task => task.column === boardIndex);
-    boardTasks.sort((a, b) => {
+    tasksInBoard.sort((a, b) => {
       let comparison = 0;
       if (sortBy === 'priority') {
-        const priorityValues = { high: 3, medium: 2, low: 1 }; // Higher value means higher priority
+        const priorityValues = { high: 3, medium: 2, low: 1 };
         const priorityA = priorityValues[a.priority.toLowerCase()] || 0;
         const priorityB = priorityValues[b.priority.toLowerCase()] || 0;
         comparison = priorityA - priorityB;
       } else if (sortBy === 'dueDate') {
         const dateA = a.dueDate ? new Date(a.dueDate) : null;
         const dateB = b.dueDate ? new Date(b.dueDate) : null;
-
         if (!dateA && !dateB) comparison = 0;
-        else if (!dateA) comparison = 1; // Tasks without due dates go to the end
-        else if (!b.dueDate) comparison = -1; // Tasks without due dates go to the end
+        else if (!dateA) comparison = 1;
+        else if (!dateB) comparison = -1;
         else comparison = dateA - dateB;
       } else if (sortBy === 'title') {
         comparison = a.title.localeCompare(b.title);
       }
       return direction === 'desc' ? -comparison : comparison;
     });
-    
-    // Replace existing tasks for the current board with the sorted ones
-    const otherBoardTasks = this.tasks.filter(task => task.column !== boardIndex);
-    this.tasks = [...otherBoardTasks, ...boardTasks];
-    // Ensure tasks maintain their original column index after sorting
-    // This is implicitly handled by filtering and spreading, but good to be mindful of.
-    
-    this.saveTasks();
-    this.renderAllTasks(); // Explicitly re-render all tasks to reflect sorting in the UI.
+
+    // Reconstruct the full tasks array with sorted tasks for the specific board
+    const finalTasks = [];
+    const maxColumnIndex = Math.max(...allTasks.map(t => t.column), 0);
+    for (let i = 0; i <= maxColumnIndex; i++) {
+      if (i === boardIndex) {
+        finalTasks.push(...tasksInBoard);
+      } else {
+        finalTasks.push(...otherTasks.filter(t => t.column === i));
+      }
+    }
+    // Add any tasks that might have had a column index higher than max found (e.g. if board was deleted)
+    // or ensure otherTasks only contains tasks from valid columns.
+    // A simpler recombination if otherTasks are already grouped by their columns from original:
+    // const reorderedTasks = [...otherTasks, ...tasksInBoard].sort((a,b) => a.column - b.column); // This might not be ideal if columns are not contiguous
+
+    useTaskStore.getState().setAllTasks(finalTasks); // Update store with new global order
+    this.renderAllTasks(); // Re-render all active tasks
   }
 
   /**
@@ -876,7 +786,7 @@ class TaskManager {
    * @param {string} subtaskTitle - The title of the new subtask.
    */
   addSubtask(parentTaskId, subtaskTitle) {
-    const parentTask = this.tasks.find(task => task.id === parentTaskId);
+    const parentTask = useTaskStore.getState().getTaskById(parentTaskId);
     if (!parentTask) {
       console.error(`Parent task with ID ${parentTaskId} not found.`);
       return;
@@ -892,19 +802,21 @@ class TaskManager {
       title: subtaskTitle,
       completed: false,
     };
-    parentTask.subtasks.push(newSubtask);
+    const newSubtasks = [...parentTask.subtasks, newSubtask];
+    useTaskStore.getState().updateTask(parentTaskId, { subtasks: newSubtasks });
     this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${newSubtask.title}" added.`);
 
-    // Re-render the parent task card to reflect subtask changes
+    // Re-render the parent task card to reflect subtask changes (using the updated task from store)
+    const updatedParentTask = useTaskStore.getState().getTaskById(parentTaskId);
     const taskElement = document.getElementById(`task-${parentTaskId}`);
-    if (taskElement && taskElement.parentElement) {
+    if (updatedParentTask && taskElement && taskElement.parentElement) {
       const parentColumn = taskElement.parentElement;
       taskElement.remove();
-      this.renderTask(parentTask, parentColumn);
+      this.renderTask(updatedParentTask, parentColumn);
     } else {
       console.warn(`Parent task element task-${parentTaskId} not found for DOM update after subtask change.`);
     }
-    this.saveTasks();
+    // Store update handles persistence
   }
 
   /**
@@ -914,7 +826,7 @@ class TaskManager {
    * @param {string} newTitle - The new title for the subtask.
    */
   editSubtask(parentTaskId, subtaskId, newTitle) {
-    const parentTask = this.tasks.find(task => task.id === parentTaskId);
+    const parentTask = useTaskStore.getState().getTaskById(parentTaskId);
     if (!parentTask) {
       console.error(`Parent task with ID ${parentTaskId} not found.`);
       return;
@@ -927,19 +839,24 @@ class TaskManager {
     }
 
     const originalSubtaskTitle = subtask.title;
-    subtask.title = newTitle;
+    const originalSubtaskTitle = subtask.title;
+    const newSubtasks = parentTask.subtasks.map(sub =>
+      sub.id === subtaskId ? { ...sub, title: newTitle } : sub
+    );
+    useTaskStore.getState().updateTask(parentTaskId, { subtasks: newSubtasks });
     this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${originalSubtaskTitle}" title changed to "${newTitle}".`);
 
     // Re-render the parent task card
+    const updatedParentTask = useTaskStore.getState().getTaskById(parentTaskId);
     const taskElement = document.getElementById(`task-${parentTaskId}`);
-    if (taskElement && taskElement.parentElement) {
+    if (updatedParentTask && taskElement && taskElement.parentElement) {
       const parentColumn = taskElement.parentElement;
       taskElement.remove();
-      this.renderTask(parentTask, parentColumn);
+      this.renderTask(updatedParentTask, parentColumn);
     } else {
       console.warn(`Parent task element task-${parentTaskId} not found for DOM update after subtask change.`);
     }
-    this.saveTasks();
+    // Store update handles persistence
   }
 
   /**
@@ -948,7 +865,7 @@ class TaskManager {
    * @param {string} subtaskId - The ID of the subtask to toggle.
    */
   toggleSubtaskCompletion(parentTaskId, subtaskId) {
-    const parentTask = this.tasks.find(task => task.id === parentTaskId);
+    const parentTask = useTaskStore.getState().getTaskById(parentTaskId);
     if (!parentTask) {
       console.error(`Parent task with ID ${parentTaskId} not found.`);
       return;
@@ -960,19 +877,24 @@ class TaskManager {
       return;
     }
 
-    subtask.completed = !subtask.completed;
-    this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${subtask.title}" marked as ${subtask.completed ? 'complete' : 'incomplete'}.`);
+    const newSubtasks = parentTask.subtasks.map(sub =>
+      sub.id === subtaskId ? { ...sub, completed: !sub.completed } : sub
+    );
+    const updatedSubtask = newSubtasks.find(s => s.id === subtaskId); // Get the updated subtask for logging
+    useTaskStore.getState().updateTask(parentTaskId, { subtasks: newSubtasks });
+    this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${updatedSubtask.title}" marked as ${updatedSubtask.completed ? 'complete' : 'incomplete'}.`);
 
     // Re-render the parent task card
+    const updatedParentTask = useTaskStore.getState().getTaskById(parentTaskId);
     const taskElement = document.getElementById(`task-${parentTaskId}`);
-    if (taskElement && taskElement.parentElement) {
+    if (updatedParentTask && taskElement && taskElement.parentElement) {
       const parentColumn = taskElement.parentElement;
       taskElement.remove();
-      this.renderTask(parentTask, parentColumn);
+      this.renderTask(updatedParentTask, parentColumn);
     } else {
       console.warn(`Parent task element task-${parentTaskId} not found for DOM update after subtask change.`);
     }
-    this.saveTasks();
+    // Store update handles persistence
   }
 
   /**
@@ -981,28 +903,33 @@ class TaskManager {
    * @param {string} subtaskId - The ID of the subtask to delete.
    */
   deleteSubtask(parentTaskId, subtaskId) {
-    const parentTask = this.tasks.find(task => task.id === parentTaskId);
+    const parentTask = useTaskStore.getState().getTaskById(parentTaskId);
     if (!parentTask) {
       console.error(`Parent task with ID ${parentTaskId} not found.`);
       return;
     }
 
     const subtaskToDelete = parentTask.subtasks.find(sub => sub.id === subtaskId);
-    parentTask.subtasks = parentTask.subtasks.filter(sub => sub.id !== subtaskId);
-    if (subtaskToDelete) {
-      this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${subtaskToDelete.title}" deleted.`);
+    const subtaskToDelete = parentTask.subtasks.find(sub => sub.id === subtaskId);
+    if (!subtaskToDelete) {
+        console.warn(`Subtask with ID ${subtaskId} not found for deletion in task ${parentTaskId}.`);
+        return;
     }
+    const newSubtasks = parentTask.subtasks.filter(sub => sub.id !== subtaskId);
+    useTaskStore.getState().updateTask(parentTaskId, { subtasks: newSubtasks });
+    this._logActivity(parentTaskId, 'SUBTASK_ACTIVITY', `Subtask "${subtaskToDelete.title}" deleted.`);
 
     // Re-render the parent task card
+    const updatedParentTask = useTaskStore.getState().getTaskById(parentTaskId);
     const taskElement = document.getElementById(`task-${parentTaskId}`);
-    if (taskElement && taskElement.parentElement) {
+    if (updatedParentTask && taskElement && taskElement.parentElement) {
       const parentColumn = taskElement.parentElement;
       taskElement.remove();
-      this.renderTask(parentTask, parentColumn);
+      this.renderTask(updatedParentTask, parentColumn);
     } else {
       console.warn(`Parent task element task-${parentTaskId} not found for DOM update after subtask change.`);
     }
-    this.saveTasks();
+    // Store update handles persistence
   }
 
   /**
@@ -1012,9 +939,36 @@ class TaskManager {
    * @param {string} detailsString - A string describing the activity.
    */
   _logActivity(taskId, activityType, detailsString) {
-    const task = this.tasks.find(t => t.id === taskId);
+    const task = useTaskStore.getState().getTaskById(taskId);
+
+    // If task is not found (e.g., after permanent delete action has committed to store),
+    // we can't update its activityLog. This is acceptable for permanent deletion logs
+    // which are now handled before the task is removed from the store by deleteTask.
+    // For other actions, task should exist.
     if (!task) {
-      console.error(`Task not found for logging activity: ${taskId}`);
+      // For TASK_DELETED_PERMANENTLY, the log is now made *before* task removal from store,
+      // so this check is mainly for other activity types on a non-existent task.
+      if (activityType !== 'TASK_DELETED_PERMANENTLY') {
+        console.warn(`Task with ID ${taskId} not found for logging activity type "${activityType}". Log skipped.`);
+      }
+      // If it was a delete log, the details are already captured and logged by deleteTask,
+      // so we just return here as there's no task object to update in the store.
+      return;
+    }
+
+    const newActivityLog = [
+      {
+        id: `log_${Date.now().toString()}_${Math.random().toString(36).substring(2, 7)}`,
+        timestamp: new Date().toISOString(),
+        type: activityType,
+        details: detailsString
+      },
+      ...(task.activityLog || [])
+    ];
+    useTaskStore.getState().updateTask(taskId, { activityLog: newActivityLog });
+  }
+
+  /**
       return;
     }
     // Ensure activityLog array exists (should be guaranteed by constructor/addTask)
@@ -1037,7 +991,7 @@ class TaskManager {
    * @param {string} parentTaskId - The ID of the parent task.
    */
   _renderActivityLog(parentTaskId) {
-    const parentTask = this.tasks.find(t => t.id === parentTaskId);
+    const parentTask = useTaskStore.getState().getTaskById(parentTaskId);
     const activityLogListElement = document.getElementById('activity-log-list');
 
     if (!activityLogListElement) {
@@ -1088,7 +1042,7 @@ class TaskManager {
    * @param {string} parentTaskId - The ID of the parent task.
    */
   _renderAttachments(parentTaskId) {
-    const parentTask = this.tasks.find(t => t.id === parentTaskId);
+    const parentTask = useTaskStore.getState().getTaskById(parentTaskId);
     const attachmentListElement = document.getElementById('attachment-list');
 
     if (!attachmentListElement) {
@@ -1171,7 +1125,7 @@ class TaskManager {
    * @param {File} file - The File object to attach.
    */
   addAttachment(taskId, file) {
-    const task = this.tasks.find(t => t.id === taskId);
+    let task = useTaskStore.getState().getTaskById(taskId);
     if (!task) {
       console.error(`Task not found for adding attachment: ${taskId}`);
       return;
@@ -1204,9 +1158,10 @@ class TaskManager {
         fileDataURL: event.target.result // Store the Data URL
       };
 
-      task.attachments.push(attachment);
+      const newAttachments = [...(task.attachments || []), attachment];
+      useTaskStore.getState().updateTask(taskId, { attachments: newAttachments });
       this._logActivity(taskId, 'ATTACHMENT_ADDED', `File "${attachment.fileName}" attached.`);
-      this.saveTasks(); // Ensure this is called *after* fileDataURL is available
+      // Store update handles persistence
     };
 
     fileReader.onerror = (error) => {
@@ -1223,7 +1178,7 @@ class TaskManager {
    * @param {string} attachmentId - The ID of the attachment to delete.
    */
   deleteAttachment(taskId, attachmentId) {
-    const task = this.tasks.find(t => t.id === taskId);
+    let task = useTaskStore.getState().getTaskById(taskId);
     if (!task) {
       console.error(`Task not found for deleting attachment: ${taskId}`);
       return;
@@ -1241,10 +1196,10 @@ class TaskManager {
     }
 
     const deletedAttachment = task.attachments[attachmentIndex]; // Get ref before splice
-    task.attachments.splice(attachmentIndex, 1);
-
+    const newAttachments = task.attachments.filter(att => att.id !== attachmentId);
+    useTaskStore.getState().updateTask(taskId, { attachments: newAttachments });
     this._logActivity(taskId, 'ATTACHMENT_REMOVED', `File "${deletedAttachment.fileName}" removed.`);
-    this.saveTasks();
+    // Store update handles persistence
   }
 }
 

@@ -4,6 +4,7 @@ import SearchManager from './modules/search-manager.js';
 import TaskManager from './modules/task-manager.js';
 import ThemeManager from './modules/theme-manager.js';
 import UIManager from './modules/ui-manager.js';
+import { useTaskStore } from './store/taskStore.js';
 
 /**
  * Main application class for Boardify.
@@ -68,6 +69,19 @@ class Boardify {
       if (this.uiManager && typeof this.uiManager.applyTaskStyling === 'function') {
         this.uiManager.applyTaskStyling();
       }
+
+      // Subscribe to task store changes to keep UI in sync
+      useTaskStore.subscribe(
+          (state, prevState) => {
+              // Simple check: re-render if tasks array ref or length changes.
+              // For more granular updates, specific property checks or a version/timestamp would be better.
+              if (state.tasks !== prevState.tasks || state.tasks.length !== prevState.tasks.length) {
+                  console.log("Task store changed, re-rendering all tasks on board via subscription.");
+                  this.taskManager.renderAllTasks(); // This will use the new store data
+              }
+          }
+      );
+
     } catch (error) {
       console.error('Error during Boardify initialization:', error);
     }
