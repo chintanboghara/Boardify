@@ -875,18 +875,60 @@ class TaskManager {
     if (parentTask && parentTask.attachments && parentTask.attachments.length > 0) {
       parentTask.attachments.forEach(attachment => {
         const li = document.createElement('li');
-        li.className = 'flex items-center justify-between p-1.5 bg-gray-100 dark:bg-gray-700 rounded-md text-xs';
+        li.className = 'flex items-center justify-between p-1.5 bg-gray-100 dark:bg-gray-700 rounded-md text-xs mb-2'; // Added mb-2 for spacing
         li.dataset.attachmentId = attachment.id;
 
-        li.innerHTML = `
-          <div class="truncate flex-grow">
-            <span class="font-medium text-gray-800 dark:text-gray-200 break-all">${attachment.fileName}</span>
-            <span class="text-gray-500 dark:text-gray-400 ml-2">(${attachment.fileType || 'unknown type'}, ${this._formatFileSize(attachment.fileSize || 0)})</span>
-          </div>
-          <button type="button" class="attachment-delete-btn text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-500 ml-2 flex-shrink-0">
-            <i class="fas fa-trash-alt text-xs"></i>
-          </button>
-        `;
+        let fileDisplayContainer = document.createElement('div');
+        fileDisplayContainer.className = 'flex items-center flex-grow truncate mr-2'; // Added mr-2 for spacing before download/delete
+
+        // Image Thumbnail
+        if (attachment.fileDataURL && attachment.fileType && attachment.fileType.startsWith('image/')) {
+          const img = document.createElement('img');
+          img.src = attachment.fileDataURL;
+          img.alt = attachment.fileName;
+          img.className = 'max-w-[80px] max-h-14 object-cover mr-2 rounded-sm'; // Tailwind classes for thumbnail
+          fileDisplayContainer.appendChild(img);
+        }
+
+        // Filename
+        const fileNameSpan = document.createElement('span');
+        fileNameSpan.className = 'font-medium text-gray-800 dark:text-gray-200 break-all';
+        fileNameSpan.textContent = attachment.fileName;
+        fileDisplayContainer.appendChild(fileNameSpan);
+
+        // File Type and Size (optional, can be added if needed, kept simple for now)
+        const fileMetaSpan = document.createElement('span');
+        fileMetaSpan.className = 'text-gray-500 dark:text-gray-400 ml-2 text-xs';
+        fileMetaSpan.textContent = `(${attachment.fileType || 'unknown type'}, ${this._formatFileSize(attachment.fileSize || 0)})`;
+        fileDisplayContainer.appendChild(fileMetaSpan);
+
+        li.appendChild(fileDisplayContainer);
+
+        // Controls Container (Download and Delete)
+        const controlsContainer = document.createElement('div');
+        controlsContainer.className = 'flex items-center flex-shrink-0';
+
+        // Download Link
+        if (attachment.fileDataURL) {
+          const downloadLink = document.createElement('a');
+          downloadLink.href = attachment.fileDataURL;
+          downloadLink.download = attachment.fileName;
+          downloadLink.innerHTML = '<i class="fas fa-download text-xs"></i>'; // Using FontAwesome icon
+          downloadLink.className = 'text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-500 mr-2 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600';
+          downloadLink.title = `Download ${attachment.fileName}`; // Tooltip
+          controlsContainer.appendChild(downloadLink);
+        }
+
+        // Delete Button
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'attachment-delete-btn text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-500 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600';
+        deleteButton.innerHTML = '<i class="fas fa-trash-alt text-xs"></i>';
+        deleteButton.title = `Delete ${attachment.fileName}`; // Tooltip
+        // The event listener for delete will be handled by the modal setup (event delegation on #attachment-list)
+        controlsContainer.appendChild(deleteButton);
+
+        li.appendChild(controlsContainer);
         attachmentListElement.appendChild(li);
       });
     } else if (parentTask) {
@@ -909,25 +951,44 @@ class TaskManager {
       return;
     }
 
+    // Define maximum file size (1MB in bytes)
+    const MAX_FILE_SIZE = 1 * 1024 * 1024;
+
+    // Check if file size exceeds the maximum
+    if (file.size > MAX_FILE_SIZE) {
+      alert(`File "${file.name}" exceeds the maximum allowed size of 1MB. It will not be attached.`);
+      return;
+    }
+
     if (!Array.isArray(task.attachments)) {
       // This should ideally not happen due to constructor migration
       console.error(`Attachments array missing for task: ${taskId}. Initializing.`);
       task.attachments = [];
     }
 
-    const attachment = {
-      id: `att_${Date.now().toString()}_${Math.random().toString(36).substring(2, 7)}`,
-      fileName: file.name,
-      fileType: file.type,
-      fileSize: file.size,
-      attachedAt: new Date().toISOString()
-      // Note: We are not storing the file content itself in localStorage
-      // as it's not suitable for large files. This stores metadata.
+    const fileReader = new FileReader();
+
+    fileReader.onload = (event) => {
+      const attachment = {
+        id: `att_${Date.now().toString()}_${Math.random().toString(36).substring(2, 7)}`,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        attachedAt: new Date().toISOString(),
+        fileDataURL: event.target.result // Store the Data URL
+      };
+
+      task.attachments.push(attachment);
+      this._logActivity(taskId, 'ATTACHMENT_ADDED', `File "${attachment.fileName}" attached.`);
+      this.saveTasks(); // Ensure this is called *after* fileDataURL is available
     };
 
-    task.attachments.push(attachment);
-    this._logActivity(taskId, 'ATTACHMENT_ADDED', `File "${attachment.fileName}" attached.`);
-    this.saveTasks();
+    fileReader.onerror = (error) => {
+      console.error(`Error reading file "${file.name}":`, error);
+      alert(`Error reading file "${file.name}". It could not be attached.`);
+    };
+
+    fileReader.readAsDataURL(file); // Start reading the file
   }
 
   /**
