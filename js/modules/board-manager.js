@@ -1,4 +1,4 @@
-import { defaultBoards, defaultTasks } from './constants';
+import { defaultBoards, defaultTasks, DEFAULT_BOARD_THEME_ID, BOARD_THEMES } from './constants';
 
 /**
  * Manages boards within the Boardify application.
@@ -8,7 +8,33 @@ class BoardManager {
     this.userId = userId;
     this.boardsKey = this.userId ? `boards_${this.userId}` : 'boards_guest'; // boards_guest for null userId
     // Load boards from localStorage or use default boards if not present.
-    this.boards = JSON.parse(localStorage.getItem(this.boardsKey)) || defaultBoards;
+    // this.boards = JSON.parse(localStorage.getItem(this.boardsKey)) || defaultBoards;
+
+    let loadedBoards = JSON.parse(localStorage.getItem(this.boardsKey));
+    if (loadedBoards) {
+        this.boards = loadedBoards;
+    } else {
+        // Deep copy defaultBoards to prevent modification of the constant
+        this.boards = JSON.parse(JSON.stringify(defaultBoards));
+    }
+
+    let migrationPerformed = false;
+    this.boards.forEach(board => {
+      if (board.color && board.themeId === undefined) {
+        board.themeId = DEFAULT_BOARD_THEME_ID;
+        delete board.color;
+        migrationPerformed = true;
+        console.log(`Migrated board "${board.title}" to use default theme.`);
+      } else if (board.themeId === undefined) {
+        board.themeId = DEFAULT_BOARD_THEME_ID;
+        migrationPerformed = true;
+      }
+    });
+
+    if (migrationPerformed) {
+      this.saveBoards();
+    }
+
     this.currentBoardIndex = null;
     this.boardsContainer = null;
     this.editBoardModal = null;
@@ -147,11 +173,10 @@ class BoardManager {
       });
 
       boardElement.innerHTML = `
-        <div class="my-4 board-header-container"> <!-- Added class for potentially grabbing this for drag handle -->
+        <div class="my-4 board-header-container">
           <div class="flex justify-between items-center flex-shrink-0 relative">
             <div>
-              <h3 style="background: ${board.color}; color: ${this.getContrastingText(board.color)}"
-                class="font-semibold text-sm md:text-base px-2 py-1 rounded">
+              <h3 class="font-semibold text-sm md:text-base px-2 py-1 rounded board-title-heading">
                 ${board.title}
               </h3>
             </div>
@@ -190,6 +215,37 @@ class BoardManager {
         </div>
       `;
       this.boardsContainer.appendChild(boardElement);
+
+      // Apply theme colors
+      const themeId = board.themeId || DEFAULT_BOARD_THEME_ID;
+      let selectedTheme = BOARD_THEMES.find(t => t.id === themeId);
+
+      if (!selectedTheme) {
+        selectedTheme = BOARD_THEMES.find(t => t.id === DEFAULT_BOARD_THEME_ID);
+        if (!selectedTheme && BOARD_THEMES.length > 0) {
+          selectedTheme = BOARD_THEMES[0]; // Fallback to the very first theme
+        }
+      }
+
+      if (selectedTheme && selectedTheme.colors) {
+        const headerTitleElement = boardElement.querySelector('.board-title-heading');
+        const taskListElement = boardElement.querySelector('.task-list');
+
+        if (headerTitleElement) {
+          headerTitleElement.style.backgroundColor = selectedTheme.colors.headerBackground || '';
+          headerTitleElement.style.color = selectedTheme.colors.headerText || this.getContrastingText(selectedTheme.colors.headerBackground || '#FFFFFF');
+        }
+        if (taskListElement) {
+          taskListElement.style.backgroundColor = selectedTheme.colors.boardBackground || '';
+        }
+
+        // Apply accent color to the main boardElement's border.
+        // Add base border classes if not already part of boardElement.className
+        if (!boardElement.classList.contains('border-2')) { // Example check
+            boardElement.classList.add('border-2', 'border-solid');
+        }
+        boardElement.style.borderColor = selectedTheme.colors.accentColor || 'transparent';
+      }
     });
 
     // Create and append "Add Board" button.
@@ -236,7 +292,7 @@ class BoardManager {
         closest = boardEl;
       }
     });
-    return closest; // The board before which the placeholder should be inserted, or null if to append at end
+    return closest;
   }
 
   initializeBoardDragDropListeners() {
@@ -248,7 +304,7 @@ class BoardManager {
       if (!e.dataTransfer.types.includes('application/boardify-board-index')) {
         return;
       }
-      e.preventDefault();
+      e.preventDefault(); // Important for allowing drop
     });
 
     this.boardsContainer.addEventListener('dragover', (e) => {
@@ -261,20 +317,25 @@ class BoardManager {
       const draggingBoard = this.boardsContainer.querySelector('.dragging-board');
       if (!draggingBoard) return;
 
-      // Adjust placeholder height if needed (can be complex if boards have dynamic heights)
-      // this.boardDropPlaceholder.style.height = `${draggingBoard.offsetHeight}px`;
+      // Make placeholder same height as the board being dragged (if reference stored)
+      // Or use fixed height matching boardElement.style if set, or from class.
+      // For simplicity, using class-defined height. The placeholder class has min-height.
+      // if (this.draggedBoardElement) {
+      //    this.boardDropPlaceholder.style.height = `${this.draggedBoardElement.offsetHeight}px`;
+      // }
+
 
       const afterElement = this.getBoardDragAfterElement(e.clientX);
-      const addBoardBtn = this.boardsContainer.querySelector('#add-new-board-btn');
-
       if (afterElement) {
         this.boardsContainer.insertBefore(this.boardDropPlaceholder, afterElement);
-      } else if (addBoardBtn) {
-        // If no element to insert before, and "Add Board" button exists, insert before it
-        this.boardsContainer.insertBefore(this.boardDropPlaceholder, addBoardBtn);
       } else {
-        // Fallback if "Add Board" button somehow not there
-        this.boardsContainer.appendChild(this.boardDropPlaceholder);
+        // If no element to insert before, append to container, but not after "Add New Board" button
+        const addBoardBtn = this.boardsContainer.querySelector('#add-new-board-btn');
+        if (addBoardBtn) {
+          this.boardsContainer.insertBefore(this.boardDropPlaceholder, addBoardBtn);
+        } else {
+          this.boardsContainer.appendChild(this.boardDropPlaceholder);
+        }
       }
     });
 
@@ -282,12 +343,9 @@ class BoardManager {
       if (!e.dataTransfer.types.includes('application/boardify-board-index')) {
         return;
       }
-      // More robust check: remove placeholder only if leaving boardsContainer or entering non-drop target
+      // Remove placeholder if cursor leaves the container bounds
       if (e.target === this.boardsContainer && !this.boardsContainer.contains(e.relatedTarget) && this.boardDropPlaceholder.parentNode) {
          this.boardDropPlaceholder.remove();
-      } else if (e.relatedTarget && !e.relatedTarget.closest('.board-draggable-item') && e.relatedTarget !== this.boardDropPlaceholder && this.boardDropPlaceholder.parentNode) {
-        // If moving outside of any draggable board or the placeholder itself
-        this.boardDropPlaceholder.remove();
       }
     });
 
@@ -301,82 +359,93 @@ class BoardManager {
       }
 
       const draggedBoardIndex = parseInt(e.dataTransfer.getData('application/boardify-board-index'), 10);
+      const allBoardElements = [...this.boardsContainer.querySelectorAll('.board-draggable-item:not(.dragging-board)')];
 
-      // Determine target index based on placeholder's future position or drop position
-      // This requires getting all board elements *excluding* the one being dragged and the placeholder
-      const boardElementsForDropTargeting = [...this.boardsContainer.querySelectorAll('.board-draggable-item:not(.dragging-board)')];
+      let targetDropIndex = allBoardElements.findIndex(boardEl => {
+          const rect = boardEl.getBoundingClientRect();
+          // Find if dropped before this element
+          return e.clientX < rect.left + rect.width / 2;
+      });
 
-      let targetDropIndex = 0; // Default to the beginning
-      let placeholderWasPresent = false;
-
-      // Find where the placeholder *would have been* or where the drop occurred relative to other boards
-      // This simplified logic determines position based on elements *after* the drop.
-      // A more robust way is to see which element the placeholder was before, if any.
-      // For this iteration, we'll use a simplified version based on drop X coordinate.
-
-      const afterElement = this.getBoardDragAfterElement(e.clientX);
-      if (afterElement) {
-        targetDropIndex = boardElementsForDropTargeting.indexOf(afterElement);
-      } else {
-        targetDropIndex = boardElementsForDropTargeting.length; // Dropped at the end (or before "Add Board" button)
+      if (targetDropIndex === -1) { // Dropped after all other boards or in empty space
+          targetDropIndex = allBoardElements.length;
       }
 
+      // Adjust targetDropIndex if dragging from left to right past its original position
+      // This logic is subtle: if dragging an item from index 2 to index 5,
+      // after removing it from index 2, the original index 5 is now 4.
+      // However, the splice operation itself handles this well if we calculate targetDropIndex
+      // based on the array *before* the dragged item is removed, then adjust.
+      // A simpler way is to remove, then calculate target in the modified array.
+      // The current targetDropIndex is based on `allBoardElements` which doesn't include the dragged one.
 
-      // Data model update
-      if (draggedBoardIndex !== targetDropIndex) { // Only update if position actually changes
-        const movedBoard = this.boards.splice(draggedBoardIndex, 1)[0];
+      // Update data model
+      const movedBoard = this.boards.splice(draggedBoardIndex, 1)[0];
+      this.boards.splice(targetDropIndex, 0, movedBoard);
 
-        // Adjust targetDropIndex if the dragged board was originally before the target spot
-        if (draggedBoardIndex < targetDropIndex) {
-          // No direct adjustment needed for targetDropIndex after splice,
-          // because targetDropIndex was based on elements *not* including the dragged one.
-          // However, the logic needs to be robust.
-          // A simpler way after splice:
-          // Find the ID of the board that is NOW at the targetDropIndex (if any)
-          // or the one that the placeholder was before.
-          // Let's refine this:
+      this.saveBoards();
+
+      // Task column re-mapping logic:
+      // Create a map of old_index -> new_index for boards
+      const newIndices = {};
+      this.boards.forEach((board, newIdx) => {
+          const oldIdx = this.boards.findIndex(b => b.title === board.title && b.themeId === board.themeId); // This assumes titles/themes are unique enough for this temporary map
+                                                                                              // A better way would be to assign unique IDs to boards if they don't have them.
+                                                                                              // For now, this is a simplified approach.
+                                                                                              // A more robust approach would be to use the original this.boards array before modification.
+                                                                                              // Let's assume boards array has been reordered and we need to map tasks
+                                                                                              // based on the new positions of board objects.
+
+          // This mapping logic is complex and error-prone if board objects are not strictly identical
+          // or if we don't have a stable ID on boards themselves.
+          // The provided logic in the prompt for task remapping is more robust by iterating based on known dragged and target indices.
+          // Re-implementing the task re-mapping based on prompt's logic structure:
+      });
+
+      // Update task columns based on the new board order
+      const tempOldTaskColumns = this.taskManager.tasks.map(task => task.column); // Store old columns
+      const newBoardOrder = this.boards.map((board, newIndex) => {
+          // Find original index of this board before the drag-drop reorder
+          // This is tricky. The prompt's logic for task re-mapping is more direct:
+      });
+
+      this.taskManager.tasks.forEach(task => {
+        if (task.column === draggedBoardIndex) {
+          task.column = -99; // Temporarily mark tasks from the dragged board
         }
+      });
 
-        this.boards.splice(targetDropIndex, 0, movedBoard);
-        this.saveBoards();
-
-        // Update task column indices
-        this.taskManager.tasks.forEach(task => {
-            if (task.column === draggedBoardIndex) {
-                task.column = -1; // Temporarily mark tasks from the dragged board
+      if (draggedBoardIndex < targetDropIndex) { // Board moved "right" (target index is now higher)
+        // Tasks in boards that were between old and new positions need their column index decreased
+        for (let i = draggedBoardIndex; i < targetDropIndex; i++) {
+          this.taskManager.tasks.forEach(task => {
+            if (task.column === i + 1) {
+              task.column = i;
             }
-        });
-
-        // Shift columns for boards between old and new position
-        if (draggedBoardIndex < targetDropIndex) { // Board moved right
-            for (let i = draggedBoardIndex; i < targetDropIndex; i++) {
-                this.taskManager.tasks.forEach(task => {
-                    if (task.column === i + 1) { // Tasks in boards that shifted left
-                        task.column = i;
-                    }
-                });
-            }
-        } else { // Board moved left
-            for (let i = draggedBoardIndex; i > targetDropIndex; i--) {
-                this.taskManager.tasks.forEach(task => {
-                    if (task.column === i - 1) { // Tasks in boards that shifted right
-                        task.column = i;
-                    }
-                });
-            }
+          });
         }
-        // Assign new column index to tasks from the moved board
-        this.taskManager.tasks.forEach(task => {
-            if (task.column === -1) {
-                task.column = targetDropIndex;
+      } else if (draggedBoardIndex > targetDropIndex) { // Board moved "left"
+        // Tasks in boards that were between new and old positions need their column index increased
+        for (let i = draggedBoardIndex; i > targetDropIndex; i--) {
+          this.taskManager.tasks.forEach(task => {
+            if (task.column === i - 1) {
+              task.column = i;
             }
-        });
-        this.taskManager.saveTasks();
-
-
-        if (this.uiManager && this.taskManager && this.dragDropManager) {
-            this.renderBoards(this.uiManager, this.taskManager, this.dragDropManager);
+          });
         }
+      }
+      // Assign new column index to tasks from the moved board
+      this.taskManager.tasks.forEach(task => {
+        if (task.column === -99) {
+          task.column = targetDropIndex;
+        }
+      });
+      this.taskManager.saveTasks();
+
+
+      // Re-render all boards.
+      if (this.uiManager && this.taskManager && this.dragDropManager) {
+          this.renderBoards(this.uiManager, this.taskManager, this.dragDropManager);
       }
     });
     this.boardDragDropInitialized = true;
@@ -384,6 +453,7 @@ class BoardManager {
 
   /**
    * Opens the modal to edit board details.
+   * @param {number} index - Index of the board to edit.
    * @param {number} index - Index of the board to edit.
    */
   openEditBoardModal(index) {
