@@ -22,7 +22,14 @@ class BoardManager {
     // References to external managers.
     this.uiManager = null;
     this.taskManager = null; // This will be set by Boardify class
-    this.dragDropManager = null;
+    this.dragDropManager = null; // For task drag-drop, not board drag-drop.
+
+    // Board drag-and-drop specific properties
+    this.boardDropPlaceholder = document.createElement('div');
+    this.boardDropPlaceholder.className = 'board-drop-placeholder flex-shrink-0 rounded-lg border-2 border-dashed border-indigo-600 dark:border-indigo-500 bg-indigo-500/10 dark:bg-indigo-500/20 w-[350px] xl:w-[400px] min-h-[74dvh] md:min-h-[78dvh] mx-1 flex items-center justify-center text-indigo-600 dark:text-indigo-400';
+    this.boardDropPlaceholder.innerHTML = `<span class="text-sm font-medium">Drop here</span>`;
+    this.draggedBoardElement = null;
+    this.boardDragDropInitialized = false;
 
     // Initialize localStorage data if boards are not already set for this user.
     if (localStorage.getItem(this.boardsKey) === null) {
@@ -109,9 +116,38 @@ class BoardManager {
     this.boards.forEach((board, index) => {
       const boardElement = document.createElement('div');
       boardElement.className =
-        'rounded-lg min-h-[74dvh] md:min-h-[78dvh] overflow-hidden flex flex-col w-[350px] xl:w-[400px] flex-shrink-0';
+        'rounded-lg min-h-[74dvh] md:min-h-[78dvh] overflow-hidden flex flex-col w-[350px] xl:w-[400px] flex-shrink-0 board-draggable-item'; // Added common class
+
+      // Make the board draggable and store its index
+      boardElement.draggable = true;
+      boardElement.dataset.boardIndex = index;
+
+      boardElement.addEventListener('dragstart', (e) => {
+        const interactiveElements = '.sort-by-due-date-btn, .sort-by-priority-btn, .plus-btn, .board-options-btn, .edit-board-btn, .delete-board-btn, .sort-board-btn';
+        if (e.target.closest(interactiveElements) || e.target.closest('.task')) {
+          e.preventDefault();
+          return;
+        }
+        e.stopPropagation();
+        const draggedBoardIndex = e.currentTarget.dataset.boardIndex;
+        e.dataTransfer.setData('application/boardify-board-index', draggedBoardIndex);
+        e.dataTransfer.effectAllowed = 'move';
+        setTimeout(() => {
+          e.currentTarget.classList.add('dragging-board');
+        }, 0);
+      });
+
+      boardElement.addEventListener('dragend', (e) => {
+        e.stopPropagation();
+        e.currentTarget.classList.remove('dragging-board');
+        const existingPlaceholder = this.boardsContainer.querySelector('.board-drop-placeholder');
+        if (existingPlaceholder) {
+          existingPlaceholder.remove();
+        }
+      });
+
       boardElement.innerHTML = `
-        <div class="my-4">
+        <div class="my-4 board-header-container"> <!-- Added class for potentially grabbing this for drag handle -->
           <div class="flex justify-between items-center flex-shrink-0 relative">
             <div>
               <h3 style="background: ${board.color}; color: ${this.getContrastingText(board.color)}"
@@ -179,6 +215,171 @@ class BoardManager {
     uiManager.attachBoardEventListeners(this, taskManager, dragDropManager);
     // Render all tasks for the boards.
     taskManager.renderAllTasks();
+    this.initializeBoardDragDropListeners();
+  }
+
+  getBoardDragAfterElement(x) {
+    const draggableBoards = [...this.boardsContainer.querySelectorAll('.board-draggable-item:not(.dragging-board):not(.board-drop-placeholder)')];
+
+    let closest = null;
+    let closestDistance = Number.POSITIVE_INFINITY;
+
+    draggableBoards.forEach(boardEl => {
+      const box = boardEl.getBoundingClientRect();
+      // Calculate distance from the cursor's X to the center of the board element
+      const distance = x - (box.left + box.width / 2);
+
+      // If distance is negative, cursor is to the left of the board's center.
+      // We want the board whose center is closest to the right of the cursor.
+      if (distance < 0 && Math.abs(distance) < closestDistance) {
+        closestDistance = Math.abs(distance);
+        closest = boardEl;
+      }
+    });
+    return closest; // The board before which the placeholder should be inserted, or null if to append at end
+  }
+
+  initializeBoardDragDropListeners() {
+    if (this.boardDragDropInitialized || !this.boardsContainer) {
+      return;
+    }
+
+    this.boardsContainer.addEventListener('dragenter', (e) => {
+      if (!e.dataTransfer.types.includes('application/boardify-board-index')) {
+        return;
+      }
+      e.preventDefault();
+    });
+
+    this.boardsContainer.addEventListener('dragover', (e) => {
+      if (!e.dataTransfer.types.includes('application/boardify-board-index')) {
+        return;
+      }
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+
+      const draggingBoard = this.boardsContainer.querySelector('.dragging-board');
+      if (!draggingBoard) return;
+
+      // Adjust placeholder height if needed (can be complex if boards have dynamic heights)
+      // this.boardDropPlaceholder.style.height = `${draggingBoard.offsetHeight}px`;
+
+      const afterElement = this.getBoardDragAfterElement(e.clientX);
+      const addBoardBtn = this.boardsContainer.querySelector('#add-new-board-btn');
+
+      if (afterElement) {
+        this.boardsContainer.insertBefore(this.boardDropPlaceholder, afterElement);
+      } else if (addBoardBtn) {
+        // If no element to insert before, and "Add Board" button exists, insert before it
+        this.boardsContainer.insertBefore(this.boardDropPlaceholder, addBoardBtn);
+      } else {
+        // Fallback if "Add Board" button somehow not there
+        this.boardsContainer.appendChild(this.boardDropPlaceholder);
+      }
+    });
+
+    this.boardsContainer.addEventListener('dragleave', (e) => {
+      if (!e.dataTransfer.types.includes('application/boardify-board-index')) {
+        return;
+      }
+      // More robust check: remove placeholder only if leaving boardsContainer or entering non-drop target
+      if (e.target === this.boardsContainer && !this.boardsContainer.contains(e.relatedTarget) && this.boardDropPlaceholder.parentNode) {
+         this.boardDropPlaceholder.remove();
+      } else if (e.relatedTarget && !e.relatedTarget.closest('.board-draggable-item') && e.relatedTarget !== this.boardDropPlaceholder && this.boardDropPlaceholder.parentNode) {
+        // If moving outside of any draggable board or the placeholder itself
+        this.boardDropPlaceholder.remove();
+      }
+    });
+
+    this.boardsContainer.addEventListener('drop', (e) => {
+      if (!e.dataTransfer.types.includes('application/boardify-board-index')) {
+        return;
+      }
+      e.preventDefault();
+      if (this.boardDropPlaceholder.parentNode) {
+        this.boardDropPlaceholder.remove();
+      }
+
+      const draggedBoardIndex = parseInt(e.dataTransfer.getData('application/boardify-board-index'), 10);
+
+      // Determine target index based on placeholder's future position or drop position
+      // This requires getting all board elements *excluding* the one being dragged and the placeholder
+      const boardElementsForDropTargeting = [...this.boardsContainer.querySelectorAll('.board-draggable-item:not(.dragging-board)')];
+
+      let targetDropIndex = 0; // Default to the beginning
+      let placeholderWasPresent = false;
+
+      // Find where the placeholder *would have been* or where the drop occurred relative to other boards
+      // This simplified logic determines position based on elements *after* the drop.
+      // A more robust way is to see which element the placeholder was before, if any.
+      // For this iteration, we'll use a simplified version based on drop X coordinate.
+
+      const afterElement = this.getBoardDragAfterElement(e.clientX);
+      if (afterElement) {
+        targetDropIndex = boardElementsForDropTargeting.indexOf(afterElement);
+      } else {
+        targetDropIndex = boardElementsForDropTargeting.length; // Dropped at the end (or before "Add Board" button)
+      }
+
+
+      // Data model update
+      if (draggedBoardIndex !== targetDropIndex) { // Only update if position actually changes
+        const movedBoard = this.boards.splice(draggedBoardIndex, 1)[0];
+
+        // Adjust targetDropIndex if the dragged board was originally before the target spot
+        if (draggedBoardIndex < targetDropIndex) {
+          // No direct adjustment needed for targetDropIndex after splice,
+          // because targetDropIndex was based on elements *not* including the dragged one.
+          // However, the logic needs to be robust.
+          // A simpler way after splice:
+          // Find the ID of the board that is NOW at the targetDropIndex (if any)
+          // or the one that the placeholder was before.
+          // Let's refine this:
+        }
+
+        this.boards.splice(targetDropIndex, 0, movedBoard);
+        this.saveBoards();
+
+        // Update task column indices
+        this.taskManager.tasks.forEach(task => {
+            if (task.column === draggedBoardIndex) {
+                task.column = -1; // Temporarily mark tasks from the dragged board
+            }
+        });
+
+        // Shift columns for boards between old and new position
+        if (draggedBoardIndex < targetDropIndex) { // Board moved right
+            for (let i = draggedBoardIndex; i < targetDropIndex; i++) {
+                this.taskManager.tasks.forEach(task => {
+                    if (task.column === i + 1) { // Tasks in boards that shifted left
+                        task.column = i;
+                    }
+                });
+            }
+        } else { // Board moved left
+            for (let i = draggedBoardIndex; i > targetDropIndex; i--) {
+                this.taskManager.tasks.forEach(task => {
+                    if (task.column === i - 1) { // Tasks in boards that shifted right
+                        task.column = i;
+                    }
+                });
+            }
+        }
+        // Assign new column index to tasks from the moved board
+        this.taskManager.tasks.forEach(task => {
+            if (task.column === -1) {
+                task.column = targetDropIndex;
+            }
+        });
+        this.taskManager.saveTasks();
+
+
+        if (this.uiManager && this.taskManager && this.dragDropManager) {
+            this.renderBoards(this.uiManager, this.taskManager, this.dragDropManager);
+        }
+      }
+    });
+    this.boardDragDropInitialized = true;
   }
 
   /**
