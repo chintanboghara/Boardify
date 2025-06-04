@@ -1,3 +1,5 @@
+import { useTaskStore } from '../store/taskStore.js';
+
 /**
  * Manages drag and drop functionality for tasks.
  */
@@ -210,30 +212,87 @@ class DragDropManager {
           }
           taskElement.classList.remove('invisible', 'dragging');
 
-          // Update the task's column in the taskManager.
-          const taskIndex = this.taskManager.tasks.findIndex(
-            task => task.id === taskId,
-          );
-          if (taskIndex !== -1) {
-            const newColumnIndex = Number.parseInt(column.dataset.index, 10);
-            this.taskManager.tasks[taskIndex].column = newColumnIndex;
+          // New store-based data update logic
+          const newColumnDomElement = taskElement.closest('.task-list');
+          if (taskId && newColumnDomElement) {
+              const newColumnIndex = Number.parseInt(newColumnDomElement.dataset.index, 10);
+              let currentTasks = [...useTaskStore.getState().tasks];
 
-            // Adjust task ordering based on current DOM positions.
-            const updatedTaskList = Array.from(column.querySelectorAll('.task')).map(
-              taskEl => taskEl.dataset.taskId
-            );
-            const taskToMove = this.taskManager.tasks.splice(taskIndex, 1)[0];
-            let insertIndex = this.taskManager.tasks.findIndex(
-              task =>
-                task.column === newColumnIndex &&
-                updatedTaskList.indexOf(task.id) >
-                  updatedTaskList.indexOf(taskId)
-            );
-            if (insertIndex === -1) {
-              insertIndex = this.taskManager.tasks.length;
-            }
-            this.taskManager.tasks.splice(insertIndex, 0, taskToMove);
-            this.taskManager.saveTasks();
+              const taskToMoveIndex = currentTasks.findIndex(t => t.id === taskId);
+              if (taskToMoveIndex !== -1) {
+                  const taskToMove = { ...currentTasks[taskToMoveIndex] };
+                  taskToMove.column = newColumnIndex;
+
+                  currentTasks.splice(taskToMoveIndex, 1);
+
+                  const tasksInNewColumnDomOrder = Array.from(newColumnDomElement.querySelectorAll('.task'))
+                                                    .map(el => el.dataset.taskId);
+
+                  const positionInDomColumn = tasksInNewColumnDomOrder.indexOf(taskId);
+                  let finalInsertIndexInStoreArray = -1;
+
+                  if (positionInDomColumn === -1) { // Should not happen if taskElement is in newColumnDomElement
+                      console.error("DragDropManager: Dropped task not found in its new DOM column.");
+                      currentTasks.push(taskToMove); // Failsafe: add to end
+                      finalInsertIndexInStoreArray = currentTasks.length -1;
+                  } else if (tasksInNewColumnDomOrder.length === 1) {
+                      let targetIdx = 0;
+                      for (let i = 0; i < currentTasks.length; i++) {
+                          if (currentTasks[i].column >= newColumnIndex) {
+                              targetIdx = i;
+                              break;
+                          }
+                          targetIdx = i + 1;
+                      }
+                      finalInsertIndexInStoreArray = targetIdx;
+                  } else if (positionInDomColumn === tasksInNewColumnDomOrder.length - 1) {
+                      let lastExistingTaskOfColumn = -1;
+                      for (let i = currentTasks.length - 1; i >= 0; i--) {
+                          if (currentTasks[i].column === newColumnIndex) {
+                              lastExistingTaskOfColumn = i;
+                              break;
+                          }
+                      }
+                      if (lastExistingTaskOfColumn !== -1) {
+                          finalInsertIndexInStoreArray = lastExistingTaskOfColumn + 1;
+                      } else {
+                          let targetIdx = 0;
+                          for (let i = 0; i < currentTasks.length; i++) {
+                              if (currentTasks[i].column >= newColumnIndex) {
+                                  targetIdx = i;
+                                  break;
+                              }
+                              targetIdx = i + 1;
+                          }
+                          finalInsertIndexInStoreArray = targetIdx;
+                      }
+                  } else {
+                      const nextTaskInDomId = tasksInNewColumnDomOrder[positionInDomColumn + 1];
+                      finalInsertIndexInStoreArray = currentTasks.findIndex(t => t.id === nextTaskInDomId);
+                      if (finalInsertIndexInStoreArray === -1) {
+                          let lastExistingTaskOfColumn = -1;
+                          for (let i = currentTasks.length - 1; i >= 0; i--) {
+                              if (currentTasks[i].column === newColumnIndex) {
+                                  lastExistingTaskOfColumn = i;
+                                  break;
+                              }
+                          }
+                          if (lastExistingTaskOfColumn !== -1) {
+                              finalInsertIndexInStoreArray = lastExistingTaskOfColumn + 1;
+                          } else {
+                              finalInsertIndexInStoreArray = currentTasks.length;
+                          }
+                      }
+                  }
+
+                  if (finalInsertIndexInStoreArray === -1) {
+                      finalInsertIndexInStoreArray = currentTasks.length;
+                  }
+
+                  currentTasks.splice(finalInsertIndexInStoreArray, 0, taskToMove);
+
+                  useTaskStore.getState().setTasksOrder(currentTasks);
+              }
           }
         }
       });
