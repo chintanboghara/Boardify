@@ -34,3 +34,7 @@ Thumbs.db
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl
+
+# Playwright E2E testing output
+playwright-report/
+test-results/
