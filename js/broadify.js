@@ -15,7 +15,8 @@ class Boardify {
 
     // Initialize application modules, passing userId where needed.
     this.boardManager = new BoardManager(this.userId);
-    this.taskManager = new TaskManager(this.userId); // TaskManager is created with userId
+    // Pass boardManager to TaskManager constructor
+    this.taskManager = new TaskManager(this.userId, this.boardManager);
     
     // Now that taskManager is initialized with userId, ensure default tasks are set up.
     // This is crucial for new users or guest sessions.
@@ -40,7 +41,7 @@ class Boardify {
     // that currently uses window.boardManager. This should be refactored in the future
     // to avoid global access, perhaps by passing boardManager instance or relevant board data
     // to taskManager more directly when needed.
-    window.boardManager = this.boardManager; 
+    // window.boardManager = this.boardManager; // Removed global assignment
 
     // Create a placeholder element for task drag-and-drop interactions.
     this.taskPlaceholder = document.createElement('div');
