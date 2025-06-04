@@ -131,7 +131,7 @@ class Boardify {
         reader.readAsText(file);
       });
     }
-    }
+    // Removed extra closing brace here
   }
 
   importData(jsonData) {
