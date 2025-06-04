@@ -1,5 +1,5 @@
 import DragDropManager from './drag-drop-manager.js';
-
+import { TaskCard } from '../components/TaskCard.js';
 import { defaultTasks } from './constants'; // Import defaultTasks
 
 /**
@@ -583,18 +583,29 @@ class TaskManager {
    * @param {HTMLElement} targetColumn - The container element for the task.
    */
   renderTask(task, targetColumn) {
-    const taskElement = document.createElement('div');
-    taskElement.className =
-      'task bg-white dark:bg-[#151A1C] rounded-md shadow-lg p-4 mt-1 flex flex-col hover:shadow-xl transition-shadow relative';
-    taskElement.id = `task-${task.id}`;
-    taskElement.dataset.taskId = task.id;
-    taskElement.draggable = true;
+    // Define event handlers to pass to the TaskCard component
+    const eventHandlers = {
+      onArchiveTask: (taskId) => {
+        this.archiveTask(taskId);
+      },
+      onEditTask: (taskToEdit) => {
+        this.openTaskModal(taskToEdit.column, taskToEdit);
+      }
+    };
 
-    // Due date styling
-    let isOverdue = false; // This will determine the text color of the due date
-    const boardManager = this.boardManager; // Access boardManager via instance property
+    // Create the card content using the component.
+    const taskElement = TaskCard(task, eventHandlers);
 
-    // Remove any existing due date styling classes first to handle updates correctly
+    // If TaskCard returns null (e.g. on error), handle it
+    if (!taskElement) {
+        console.error(`Failed to render TaskCard for task ID: ${task.id}`);
+        return;
+    }
+    // TaskCard now sets id, dataset.taskId, draggable, and base className.
+
+    // --- Due Date Styling (Overdue/Due Soon Borders) ---
+    // This logic remains in renderTask as it depends on boardManager context.
+    const boardManager = this.boardManager;
     taskElement.classList.remove(
       'overdue-task', 
       'due-today', 
@@ -642,47 +653,10 @@ class TaskManager {
       isOverdue = false;
     }
 
-    const priorityClass = this.getPriorityClass(task.priority);
-
-    // Calculate Subtask Statistics & Generate Display HTML
-    let subtaskDisplayHtml = '';
-    if (task.subtasks && task.subtasks.length > 0) {
-      const totalSubtasks = task.subtasks.length;
-      const completedSubtasks = task.subtasks.filter(st => st.completed).length;
-      const progressPercentage = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
-      subtaskDisplayHtml = `
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2 mb-1">Subtasks: ${completedSubtasks} / ${totalSubtasks}</p>
-        <div class="w-full bg-gray-200 rounded-full h-1.5 dark:bg-gray-700 mb-2">
-          <div class="bg-indigo-600 h-1.5 rounded-full" style="width: ${progressPercentage}%"></div>
-        </div>
-      `;
-    }
-
-    taskElement.innerHTML = `
-      <div class="flex justify-between items-start mb-3">
-        <h4 class="font-medium text-gray-900 dark:text-white text-lg">${task.title}</h4>
-        <span class="priority-badge flex items-center justify-center text-sm px-3 py-1 rounded-md ${priorityClass}" data-priority="${task.priority}">
-          ${task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : 'Low'}
-        </span>
-      </div>
-      <div class="prose prose-sm dark:prose-invert text-gray-600 dark:text-gray-400 break-words line-clamp-3 mb-4">
-        ${task.description ? marked.parse(task.description) : '<p class="text-gray-500 italic">No description</p>'}
-      </div>
-      ${subtaskDisplayHtml}
-      ${task.dueDate ? `<p class="text-sm ${isOverdue ? 'text-red-500 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'} mt-1">Due: ${new Date(task.dueDate).toLocaleDateString()}</p>` : ''}
-      ${task.assignee ? `<p class="text-gray-600 dark:text-gray-400 break-words line-clamp-3 text-sm mt-1">Assignee: ${task.assignee}</p>` : ''}
-      <div class="flex justify-end space-x-2 mt-auto pt-2">
-        <button class="edit-task-btn p-2 text-gray-700 rounded-md transition-all hover:bg-white/20 dark:text-gray-300" data-task-id="${task.id}" title="Edit Task">
-          <i class="fas fa-pencil-alt text-sm"></i>
-        </button>
-        <button class="task-card-archive-btn p-2 text-gray-700 rounded-md transition-all hover:bg-white/20 dark:text-gray-300" data-task-id="${task.id}" title="Archive Task">
-          <i class="fas fa-archive text-sm"></i>
-        </button>
-      </div>
-    `;
     targetColumn.appendChild(taskElement);
 
-    // Initialize or reuse the DragDropManager instance.
+    // --- Drag and Drop Event Listeners ---
+    // These remain attached by TaskManager.renderTask to the taskElement created by TaskCard.
     // Ensure this.dragDropManager is initialized before calling methods on it.
     if (!this.dragDropManager) {
         this.dragDropManager = new DragDropManager(this);
@@ -850,13 +824,8 @@ class TaskManager {
     });
 
     // Attach event listeners for editing and deleting the task.
-    taskElement.querySelector('.edit-task-btn').addEventListener('click', () => {
-      this.openTaskModal(task.column, task);
-    });
-
-    taskElement.querySelector('.task-card-archive-btn').addEventListener('click', () => {
-      this.archiveTask(task.id);
-    });
+    // taskElement.querySelector('.edit-task-btn')... // Handled by TaskCard
+    // taskElement.querySelector('.task-card-archive-btn')... // Handled by TaskCard
   }
 
   /**
