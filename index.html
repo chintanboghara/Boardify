@@ -158,6 +158,35 @@
             </svg>
           </button>
 
+          <!-- Insert this button -->
+          <button
+            id="view-archived-tasks-btn"
+            class="ml-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+            title="View Archived Tasks"
+          >
+            <i class="fas fa-archive"></i>
+            <span class="hidden sm:inline ml-1">Archived</span>
+          </button>
+
+          <!-- Insert this button, e.g., next to Archived Tasks button -->
+          <button
+            id="export-data-btn"
+            class="ml-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+            title="Export Board Data"
+          >
+            <i class="fas fa-download"></i>
+            <span class="hidden sm:inline ml-1">Export</span>
+          </button>
+          <button
+            id="import-data-btn"
+            class="ml-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700"
+            title="Import Board Data"
+          >
+            <i class="fas fa-upload"></i>
+            <span class="hidden sm:inline ml-1">Import</span>
+          </button>
+          <input type="file" id="import-file-input" class="hidden" accept=".json">
+
           <!-- Login/Sign Up Buttons -->
           <button
             id="login-btn"
@@ -656,7 +685,19 @@
             </div>
 
             <!-- Form Buttons -->
-            <div class="mt-6 flex justify-end space-x-4">
+            <div class="mt-6 flex items-center justify-end space-x-4">
+              <!-- New Archive Button -->
+              <button
+                type="button"
+                id="archive-task-modal-btn"
+                class="hidden cursor-pointer rounded-md bg-rose-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-600 mr-auto"
+                title="Archive Task"
+              >
+                <i class="fas fa-archive mr-1 sm:mr-2"></i>
+                <span class="hidden sm:inline">Archive Task</span>
+                <span class="sm:hidden">Archive</span>
+              </button>
+
               <button
                 type="button"
                 id="cancel-modal"
@@ -775,5 +816,35 @@
     <!-- Main Script -->
     <script type="module" src="./js/script.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@4.0.12/marked.min.js"></script>
+
+    <!-- Archived Tasks Modal -->
+    <div id="archived-tasks-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4">
+      <div class="w-full max-w-xl overflow-hidden rounded-lg bg-white shadow-lg dark:bg-[#121617]">
+        <div class="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700">
+          <h3 class="font-medium text-gray-900 dark:text-white">Archived Tasks</h3>
+          <button id="close-archived-tasks-modal" class="cursor-pointer text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Close">
+            &times;
+          </button>
+        </div>
+        <div class="p-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+          <ul id="archived-tasks-list" class="space-y-3">
+            <!-- Archived task items will be dynamically inserted here -->
+            <!-- Example:
+            <li class="flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-700 rounded-md">
+              <div>
+                <h4 class="font-medium text-gray-800 dark:text-gray-200">Archived Task Title</h4>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Archived on: YYYY-MM-DD</p>
+              </div>
+              <div class="space-x-2">
+                <button class="unarchive-btn text-sm text-indigo-600 hover:text-indigo-800" data-task-id="task_id_1">Unarchive</button>
+                <button class="perm-delete-btn text-sm text-red-500 hover:text-red-700" data-task-id="task_id_1">Delete Permanently</button>
+              </div>
+            </li>
+            -->
+          </ul>
+          <p id="no-archived-tasks-message" class="hidden py-4 text-center text-gray-500 dark:text-gray-400">No archived tasks found.</p>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

@@ -169,6 +169,12 @@ document.addEventListener('DOMContentLoaded', () => {
         app.autoScrollOnDrag(event);
       }
     });
+
+  // Add global keyboard shortcut listener
+  document.addEventListener('keydown', (event) => {
+    app.handleKeyboardShortcuts(event);
+  });
+
   } catch (error) {
     console.error("Failed to initialize Boardify app:", error);
   }

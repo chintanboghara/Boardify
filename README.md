@@ -23,6 +23,19 @@ Boardify is a simple yet powerful Kanban board application designed for efficien
 -   **Local Storage Persistence:** Your tasks and board configurations are stored locally in your browser for quick access and persistence across sessions.
 -   **Fully Responsive Design:** Enjoy a seamless experience whether you're on a desktop, tablet, or mobile device.
 
+## Keyboard Shortcuts
+
+Boost your productivity with these keyboard shortcuts:
+
+-   `Shift + A`: Open the "Add New Task" modal (for the first board).
+-   `/`: Focus the search input.
+-   `Escape`:
+    -   Close any open modal (Task, Edit Board, Archived Tasks).
+    -   If search input is focused and contains text, clear the search.
+    -   If search input is focused and empty, remove focus from the search input.
+-   `Shift + V`: Open the "View Archived Tasks" modal.
+-   `Ctrl + Enter` (or `Cmd + Enter` on Mac): Save changes when the Task Modal is open and an input/textarea within it is focused.
+
 ## Tech Stack
 
 -   [HTML5](https://developer.mozilla.org/en-US/docs/Web/HTML): For structuring the application content.
