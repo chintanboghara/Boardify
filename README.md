@@ -14,7 +14,7 @@ Boardify is a simple yet powerful Kanban board application designed for efficien
 -   **Search & Filter:** Quickly find specific tasks using the built-in search functionality.
 -   **Task Breakdown (Subtasks):** Break down complex tasks into smaller, manageable subtasks. Each subtask can be marked as complete, and progress is visually displayed on the parent task card. Subtasks are managed within the task editing modal.
 -   **Task Activity Log:** Keep track of changes to your tasks. Each task now has an activity log that records actions like creation, updates to key fields (title, description, priority, etc.), and subtask modifications. Logs are viewable within the task editing modal.
--   **File Attachments (Metadata):** Attach files to tasks by selecting them via a file input. The application stores metadata (file name, type, size, and attachment date) and displays this information. Attachments can be removed from tasks. (Note: This initial version stores metadata only; it does not upload or store the actual file content.)
+-   **File Attachments:** Attach small files (e.g., images, small documents up to 1MB) to tasks. Files are stored directly in your browser's `localStorage` as Data URLs, allowing for local persistence without a backend server. Metadata (file name, type, size, attachment date) is also stored and displayed. Attachments can be removed from tasks. (Note: Due to `localStorage` limitations, this feature is suitable for small files only and not for large or sensitive data.)
 -   **Markdown in Descriptions:** Task descriptions now support Markdown formatting, allowing for richer text including headings, lists, bold/italic text, links, and code snippets. The Markdown is rendered on task cards for easy viewing. A hint and a link to a syntax guide are provided in the task modal.
 -   **Multiple Board Support:** Manage several distinct Kanban boards simultaneously.
 -   **Visual Due Date Indicators:** Tasks are visually highlighted if they are overdue, due today, or due soon (within the next 3 days), helping users prioritize effectively.
@@ -104,7 +104,7 @@ This method uses the pre-built Docker image available on GitHub Packages. It's a
     docker run -d -p 8080:80 --name boardify chintanboghara/boardify:latest
     ```
     *   `-d`: Run the container in detached mode (in the background).
-    *   `-p 8080:80`: Map port 8080 on your host machine to port 80 inside the container (assuming the container exposes port 80).
+    *   `-p 8080:80`: Map port 8080 on your host machine to port 80 inside the container (where Nginx serves the application). You can use other host ports if 8080 is unavailable (e.g., `-p 5173:80` to match the `docker-compose.yml` configuration).
     *   `--name boardify`: Assign a name to the container for easier management.
 
 3.  **Access the app:**

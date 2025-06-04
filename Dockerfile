@@ -1,5 +1,5 @@
 # Build stage
-FROM node:23 AS builder
+FROM node:lts AS builder
 RUN npm install -g pnpm
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
