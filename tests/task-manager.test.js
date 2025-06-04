@@ -2,6 +2,7 @@ import TaskManager from '../js/modules/task-manager.js';
 // Import DragDropManager to allow Jest to mock it.
 // We don't use this import directly in the test, but Jest needs it for mocking the module.
 import DragDropManager from '../js/modules/drag-drop-manager.js';
+import { marked } from 'marked';
 
 // Mock DragDropManager
 // This mocks the module, so when TaskManager internally does `new DragDropManager()`,
@@ -17,17 +18,38 @@ jest.mock('../js/modules/drag-drop-manager.js', () => {
   });
 });
 
-// localStorage mock
-const localStorageMock = (() => {
-  let store = {};
-  return {
-    getItem: jest.fn((key) => store[key] || null),
-    setItem: jest.fn((key, value) => { store[key] = value.toString(); }),
-    clear: jest.fn(() => { store = {}; }),
-    removeItem: jest.fn((key) => { delete store[key]; }),
-  };
-})();
-Object.defineProperty(global, 'localStorage', { value: localStorageMock });
+// Mock marked
+jest.mock('marked', () => ({
+  parse: jest.fn(desc => desc), // Simple mock, returns content as is
+}));
+
+// localStorage mock - The existing one is good.
+let store = {};
+const localStorageMock = {
+  getItem: jest.fn((key) => store[key] || null),
+  setItem: jest.fn((key, value) => {
+    store[key] = value.toString();
+  }),
+  clear: jest.fn(() => {
+    store = {};
+  }),
+  removeItem: jest.fn(key => {
+    delete store[key];
+  })
+};
+Object.defineProperty(window, 'localStorage', { value: localStorageMock });
+
+
+// Mock FileReader
+global.FileReader = jest.fn(() => ({
+  readAsDataURL: jest.fn(),
+  onload: jest.fn(),
+  onerror: jest.fn(),
+  result: 'fakeDataURLDefault' // Default result for cases where onload is triggered directly
+}));
+
+// Mock alert
+global.alert = jest.fn();
 
 // document mock
 global.document = {
@@ -51,18 +73,22 @@ describe('TaskManager', () => {
 
   beforeEach(() => {
     // Clear all instances and calls to constructor and all methods:
-    localStorageMock.clear();
+    store = {}; // Reset the store directly for localStorageMock
     localStorageMock.getItem.mockClear();
     localStorageMock.setItem.mockClear();
+    localStorageMock.clear.mockClear();
     localStorageMock.removeItem.mockClear();
     
     document.getElementById.mockClear();
     document.querySelectorAll.mockClear();
-    // If getElementById returns objects with methods, clear them too if necessary
-    // e.g., if a specific element's reset method was called:
-    // document.getElementById('task-form').reset.mockClear(); // but this needs careful handling of return values
 
     global.confirm.mockClear();
+    global.alert.mockClear(); // Clear alert mock calls
+
+    // Clear FileReader mock instances and their methods' calls
+    global.FileReader.mockClear();
+    // If FileReader instances are created, you might need to clear their method calls too,
+    // but usually, re-mocking or clearing the constructor is enough if instances are not persisted across tests.
 
     // Create a fresh UIManager mock for each test
     mockUIManager = {
@@ -72,9 +98,17 @@ describe('TaskManager', () => {
 
     taskManager = new TaskManager('testUser1'); // Using a consistent userId for tests
     taskManager.setUIManager(mockUIManager);
-    // TaskManager will instantiate its own DragDropManager, which will be the mocked version
-    // due to jest.mock() at the top of the file.
-    // No need to manually assign taskManager.dragDropManager if the module mock works as expected.
+
+    // Spy on renderAllTasks and mock its implementation to prevent DOM errors
+    // This is preferred over relying on document.querySelectorAll mock for this specific case
+    jest.spyOn(taskManager, 'renderAllTasks').mockImplementation(() => {});
+    jest.spyOn(taskManager, '_renderAttachments').mockImplementation(() => {}); // Also mock if it interacts with DOM heavily
+
+  });
+
+  afterEach(() => {
+    // Restore any spied mocks
+    jest.restoreAllMocks();
   });
 
   describe('Due Date Functionality', () => {
@@ -866,25 +900,153 @@ describe('TaskManager', () => {
       });
 
       it('should log an error when adding attachment to non-existent task', () => {
-        taskManager.addAttachment('invalidTaskId', mockFile);
-        expect(consoleErrorSpy).toHaveBeenCalledWith('Task not found for adding attachment: invalidTaskId');
+        const consoleErrorSpyAdd = jest.spyOn(console, 'error').mockImplementation(() => {});
+        taskManager.addAttachment('invalidTaskId', mockFile); // mockFile defined in parent describe
+        expect(consoleErrorSpyAdd).toHaveBeenCalledWith('Task not found for adding attachment: invalidTaskId');
         expect(localStorageMock.setItem).not.toHaveBeenCalled();
+        consoleErrorSpyAdd.mockRestore();
       });
 
       it('should log an error when deleting attachment from non-existent task', () => {
+        const consoleErrorSpyDelete = jest.spyOn(console, 'error').mockImplementation(() => {});
         taskManager.deleteAttachment('invalidTaskId', 'someAttachmentId');
-        expect(consoleErrorSpy).toHaveBeenCalledWith('Task not found for deleting attachment: invalidTaskId');
+        expect(consoleErrorSpyDelete).toHaveBeenCalledWith('Task not found for deleting attachment: invalidTaskId');
         expect(localStorageMock.setItem).not.toHaveBeenCalled();
+        consoleErrorSpyDelete.mockRestore();
       });
 
-      it('should log an error when deleting non-existent attachment', () => {
-        taskManager.deleteAttachment(parentTaskId, 'invalidAttachmentId');
-        expect(consoleErrorSpy).toHaveBeenCalledWith(`Attachment with ID invalidAttachmentId not found in task ${parentTaskId}.`);
-        // saveTasks is NOT called if attachment not found, so setItem should not be called here.
+      it('should log an error when deleting non-existent attachment from an existing task', () => {
+        const consoleErrorSpyDeleteAtt = jest.spyOn(console, 'error').mockImplementation(() => {});
+        taskManager.deleteAttachment(parentTaskId, 'invalidAttachmentId'); // parentTaskId defined in parent describe
+        expect(consoleErrorSpyDeleteAtt).toHaveBeenCalledWith(`Attachment with ID invalidAttachmentId not found in task ${parentTaskId}.`);
         expect(localStorageMock.setItem).not.toHaveBeenCalled();
+        consoleErrorSpyDeleteAtt.mockRestore();
       });
     });
-  });
+  }); // End of Attachment Management
+
+  // Ensure this is the very last describe block or structure accordingly
+  describe('Attachment Management', () => {
+    let testTaskId;
+    const defaultTaskDetails = {
+      title: 'Attachment Task',
+      description: 'A task for testing attachments',
+      priority: 'medium',
+      dueDate: '',
+      assignee: 'Tester',
+      columnIndex: 0
+    };
+
+    beforeEach(() => {
+      // Add a task for attachment tests
+      taskManager.addTask(
+        defaultTaskDetails.title,
+        defaultTaskDetails.description,
+        defaultTaskDetails.priority,
+        defaultTaskDetails.dueDate,
+        defaultTaskDetails.assignee,
+        defaultTaskDetails.columnIndex
+      );
+      const tasks = taskManager.getTasks();
+      testTaskId = tasks.find(t => t.title === defaultTaskDetails.title).id;
+      localStorageMock.setItem.mockClear(); // Clear after this setup
+       // Ensure FileReader mock instances are cleared for each test if necessary
+      global.FileReader.mockClear();
+      // Clear any previous calls to readAsDataURL on any instance
+      if (global.FileReader.mock.instances.length > 0) {
+        global.FileReader.mock.instances.forEach(instance => {
+          instance.readAsDataURL.mockClear();
+          instance.onload = jest.fn(); // Reset onload handler
+          instance.onerror = jest.fn(); // Reset onerror handler
+        });
+      }
+      global.alert.mockClear();
+    });
+
+    it('should add a valid attachment to a task', () => {
+      const mockFile = { name: 'test.png', type: 'image/png', size: 1024 }; // 1KB
+
+      taskManager.addAttachment(testTaskId, mockFile);
+
+      // Simulate FileReader onload
+      // Access the last created instance of the FileReader mock
+      const mockReaderInstance = global.FileReader.mock.instances[0];
+      expect(mockReaderInstance.readAsDataURL).toHaveBeenCalledWith(mockFile);
+
+      // Manually trigger onload
+      mockReaderInstance.onload({ target: { result: 'fakeDataURL' } });
+
+      const task = taskManager.getTasks().find(t => t.id === testTaskId);
+      expect(task.attachments.length).toBe(1);
+      expect(task.attachments[0].fileName).toBe(mockFile.name);
+      expect(task.attachments[0].fileDataURL).toBe('fakeDataURL');
+      expect(localStorageMock.setItem).toHaveBeenCalledTimes(1); // saveTasks should be called
+      expect(taskManager.renderAllTasks).toHaveBeenCalled(); // saveTasks calls renderAllTasks
+    });
+
+    it('should alert and not add a file that is too large', () => {
+      const mockLargeFile = { name: 'large.jpg', type: 'image/jpeg', size: 2 * 1024 * 1024 }; // 2MB
+
+      taskManager.addAttachment(testTaskId, mockLargeFile);
+
+      expect(global.alert).toHaveBeenCalledWith(`File "${mockLargeFile.name}" exceeds the maximum allowed size of 1MB. It will not be attached.`);
+
+      const task = taskManager.getTasks().find(t => t.id === testTaskId);
+      expect(task.attachments.length).toBe(0); // No attachment should be added
+
+      // FileReader should not have been used for an oversized file
+      expect(global.FileReader.mock.instances.length).toBe(0);
+      // Or if an instance was created but not used:
+      // if (global.FileReader.mock.instances.length > 0) {
+      //   expect(global.FileReader.mock.instances[0].readAsDataURL).not.toHaveBeenCalled();
+      // }
+
+      expect(localStorageMock.setItem).not.toHaveBeenCalled(); // saveTasks should not be called
+    });
+
+    it('should delete an attachment from a task', () => {
+      const mockFile = { name: 'file-to-delete.txt', type: 'text/plain', size: 500 };
+      taskManager.addAttachment(testTaskId, mockFile);
+      const mockReaderInstance = global.FileReader.mock.instances[0];
+      mockReaderInstance.onload({ target: { result: 'someDataURL' } }); // Ensure attachment is added
+
+      let task = taskManager.getTasks().find(t => t.id === testTaskId);
+      expect(task.attachments.length).toBe(1);
+      const attachmentId = task.attachments[0].id;
+
+      localStorageMock.setItem.mockClear(); // Clear after adding
+
+      taskManager.deleteAttachment(testTaskId, attachmentId);
+
+      task = taskManager.getTasks().find(t => t.id === testTaskId);
+      expect(task.attachments.length).toBe(0);
+      expect(localStorageMock.setItem).toHaveBeenCalledTimes(1); // saveTasks should be called
+      expect(taskManager.renderAllTasks).toHaveBeenCalledTimes(2); // Once for add, once for delete
+    });
+
+    it('should handle FileReader error during attachment processing', () => {
+        const mockFile = { name: 'error-file.txt', type: 'text/plain', size: 100 };
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        taskManager.addAttachment(testTaskId, mockFile);
+
+        const mockReaderInstance = global.FileReader.mock.instances[0];
+        expect(mockReaderInstance.readAsDataURL).toHaveBeenCalledWith(mockFile);
+
+        // Simulate FileReader onerror
+        mockReaderInstance.onerror({ target: { error: new Error('Test FileReader error') } });
+
+        expect(global.alert).toHaveBeenCalledWith(`Error reading file "${mockFile.name}". It could not be attached.`);
+        expect(consoleErrorSpy).toHaveBeenCalledWith(`Error reading file "${mockFile.name}":`, { target: { error: new Error('Test FileReader error') } });
+
+        const task = taskManager.getTasks().find(t => t.id === testTaskId);
+        expect(task.attachments.length).toBe(0); // Attachment should not have been added
+        expect(localStorageMock.setItem).not.toHaveBeenCalled(); // saveTasks should not be called on error before attachment is processed
+
+        consoleErrorSpy.mockRestore();
+    });
+
+  }); // End of Attachment Management
 });
 
 // Note: For renderTask and other DOM-heavy methods, you'd typically check:
