@@ -1,11 +1,12 @@
 /**
  * Default board configurations.
- * Each board object includes a title and a color for styling.
+ * Default board configurations.
+ * Each board object includes a title and now a themeId for styling.
  */
 export const defaultBoards = [
-  { title: 'To Do', color: '#93c5fd' },
-  { title: 'In Progress', color: '#fcd34d' },
-  { title: 'Done', color: '#86efac' },
+  { title: 'To Do', themeId: 'ocean_blue' }, // Was blue, matches ocean_blue
+  { title: 'In Progress', themeId: 'sunset_orange' }, // Was yellow/orange, matches sunset_orange
+  { title: 'Done', themeId: 'forest_green' }, // Was green, matches forest_green
 ];
 
 /**
@@ -77,3 +78,68 @@ export const defaultTasks = [
     column: 2,
   },
 ];
+
+export const BOARD_THEMES = [
+  {
+    id: 'default_light',
+    name: 'Default Light',
+    colors: {
+      headerBackground: '#e0e0e0', // Light Gray - similar to original default
+      headerText: '#1f2937',      // Dark Gray text
+      boardBackground: '#f9fafb', // Very Light Gray / White for task area
+      accentColor: '#d1d5db',     // Medium Gray for border
+    }
+  },
+  {
+    id: 'default_dark_header', // A theme that might work with dark mode, focusing on header
+    name: 'Dark Header',
+    colors: {
+      headerBackground: '#374151', // Dark Gray
+      headerText: '#f9fafb',      // Light text
+      boardBackground: '#1f2937', // Slightly lighter dark for task area (example)
+      accentColor: '#4b5563',     // Medium-Dark Gray for border
+    }
+  },
+  {
+    id: 'ocean_blue',
+    name: 'Ocean Blue',
+    colors: {
+      headerBackground: '#3b82f6', // Blue-500
+      headerText: '#ffffff',      // White text
+      boardBackground: '#eff6ff', // Blue-50 (very light blue)
+      accentColor: '#60a5fa',     // Blue-400
+    }
+  },
+  {
+    id: 'forest_green',
+    name: 'Forest Green',
+    colors: {
+      headerBackground: '#16a34a', // Green-600
+      headerText: '#ffffff',      // White text
+      boardBackground: '#f0fdf4', // Green-50 (very light green)
+      accentColor: '#4ade80',     // Green-400
+    }
+  },
+  {
+    id: 'sunset_orange',
+    name: 'Sunset Orange',
+    colors: {
+      headerBackground: '#f97316', // Orange-500
+      headerText: '#ffffff',      // White text
+      boardBackground: '#fff7ed', // Orange-50 (very light orange)
+      accentColor: '#fb923c',     // Orange-400
+    }
+  },
+  {
+    id: 'charcoal_slate',
+    name: 'Charcoal Slate',
+    colors: {
+      headerBackground: '#475569', // Slate-600
+      headerText: '#f1f5f9',      // Slate-100 (light text)
+      boardBackground: '#f1f5f9', // Slate-100 (for a lighter task area contrast)
+      accentColor: '#64748b',     // Slate-500
+    }
+  }
+];
+
+export const DEFAULT_BOARD_THEME_ID = 'default_light';
