@@ -639,51 +639,111 @@ class TaskManager {
       if (taskElement.classList.contains('dragging')) {
         e.preventDefault();
         const touch = e.changedTouches[0];
-        // Determine the element/column below the touch point
         const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
         const newColumnElement = elemBelow?.closest('.task-list');
         const taskId = taskElement.dataset.taskId;
-        const taskIndex = this.tasks.findIndex(t => t.id === taskId);
 
-        if (taskIndex === -1) {
+        const originalTaskIndexInArray = this.tasks.findIndex(t => t.id === taskId);
+
+        if (originalTaskIndexInArray === -1) {
             dragDropManager.handleDragEnd(taskElement);
+            console.warn(`Task with ID ${taskId} not found in data array during touchend.`);
             return;
         }
+        const taskToMove = this.tasks[originalTaskIndexInArray];
 
-        let columnChanged = false;
         if (newColumnElement) {
-            const oldColumnIndex = this.tasks[taskIndex].column;
+            const oldColumnIndex = taskToMove.column;
             const newColumnIndex = Number.parseInt(newColumnElement.dataset.index, 10);
 
+            // DOM Manipulation: Move taskElement to its new visual position
             if (oldColumnIndex !== newColumnIndex) {
-                // Column changed: Update data, move DOM element
-                this.tasks[taskIndex].column = newColumnIndex;
-                newColumnElement.appendChild(taskElement); // Move to new column's DOM
-                columnChanged = true;
-                // Note: Task array reordering for touch is simplified here.
-                // DragDropManager's 'drop' event has more robust array reordering for mouse.
-                // For touch, we primarily handle the column data change and DOM move.
-                // A more complete solution would replicate DragDropManager's array reordering here.
+                newColumnElement.appendChild(taskElement);
             } else {
-                // Dropped in the same column.
-                // Attempt to insert based on placeholder position.
                 const placeholder = newColumnElement.querySelector('.task-placeholder');
                 if (placeholder) {
                     newColumnElement.insertBefore(taskElement, placeholder);
                 } else {
-                    // Fallback: append if no placeholder (should ideally not happen if touchmove worked)
-                    newColumnElement.appendChild(taskElement);
+                    newColumnElement.appendChild(taskElement); // Fallback
                 }
-                // Placeholder should be removed by handleDragEnd or here.
-                // dragDropManager.clearPlaceholders(); // Or rely on handleDragEnd
+            }
+            if (newColumnElement.querySelector('.task-placeholder')) {
+              newColumnElement.querySelector('.task-placeholder').remove();
             }
 
-            // If column changed or dropped in a valid column, save tasks.
-            // The DragDropManager.drop method also calls saveTasks.
-            // We call it here to ensure data (like new column index) is saved for touch events.
+
+            // Data Update
+            taskToMove.column = newColumnIndex; // Update column first
+
+            // Remove from old position in data array
+            this.tasks.splice(originalTaskIndexInArray, 1);
+
+            // Get new DOM order in the target column
+            const tasksInNewColumnDomOrder = Array.from(newColumnElement.querySelectorAll('.task:not(.task-placeholder)'))
+                                              .map(el => el.dataset.taskId);
+
+            let insertIndex = -1;
+            const positionInDomColumn = tasksInNewColumnDomOrder.indexOf(taskId);
+
+            if (positionInDomColumn === -1) {
+                // Should not happen if taskElement was just added to newColumnElement
+                console.error('Error: Dragged task not found in its new DOM column after move.');
+                // Fallback: add to end of current tasks for this column, or just end of array
+                this.tasks.push(taskToMove); // Simplistic fallback
+            } else if (tasksInNewColumnDomOrder.length === 1) {
+                // Task is the only one in its new DOM column. Find where this column's tasks should start.
+                let targetIdx = 0;
+                for (let i = 0; i < this.tasks.length; i++) {
+                    if (this.tasks[i].column >= newColumnIndex) {
+                        targetIdx = i;
+                        break;
+                    }
+                    targetIdx = i + 1;
+                }
+                insertIndex = targetIdx;
+            } else if (positionInDomColumn === tasksInNewColumnDomOrder.length - 1) {
+                // Task is the last in its new DOM column.
+                // Find the index of the last task in `this.tasks` (that's not taskToMove) belonging to newColumnIndex.
+                let lastIndexOfSameColumn = -1;
+                for (let i = this.tasks.length - 1; i >= 0; i--) {
+                    if (this.tasks[i].column === newColumnIndex) {
+                        lastIndexOfSameColumn = i;
+                        break;
+                    }
+                }
+                if (lastIndexOfSameColumn !== -1) {
+                    insertIndex = lastIndexOfSameColumn + 1;
+                } else {
+                    // If no other tasks in this column, find where this column's tasks should start
+                    let targetIdx = 0;
+                    for (let i = 0; i < this.tasks.length; i++) {
+                        if (this.tasks[i].column >= newColumnIndex) {
+                            targetIdx = i;
+                            break;
+                        }
+                        targetIdx = i + 1;
+                    }
+                    insertIndex = targetIdx;
+                }
+            } else {
+                // Task is in the middle. Find the task that comes after it in the DOM.
+                const nextTaskInDomId = tasksInNewColumnDomOrder[positionInDomColumn + 1];
+                const nextTaskInArrayIndex = this.tasks.findIndex(t => t.id === nextTaskInDomId);
+                if (nextTaskInArrayIndex !== -1) {
+                    insertIndex = nextTaskInArrayIndex;
+                } else {
+                     // Fallback if next task in DOM not found in current data array (should be rare)
+                    console.warn(`Next task ID ${nextTaskInDomId} not found in data array. Appending dragged task.`);
+                    insertIndex = this.tasks.length;
+                }
+            }
+
+            if (insertIndex === -1) { // Final fallback if something went wrong
+                insertIndex = this.tasks.length;
+            }
+            this.tasks.splice(insertIndex, 0, taskToMove);
             this.saveTasks();
         }
-        // Always clean up drag state (removes placeholder, resets opacity, etc.)
         dragDropManager.handleDragEnd(taskElement);
       }
     });
