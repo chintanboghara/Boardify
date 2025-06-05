@@ -1,4 +1,5 @@
 import { defaultBoards, defaultTasks, DEFAULT_BOARD_THEME_ID, BOARD_THEMES } from './constants';
+import { useTaskStore } from '../store/taskStore.js';
 
 /**
  * Manages boards within the Boardify application.
@@ -55,6 +56,7 @@ class BoardManager {
     this.boardDropPlaceholder.className = 'board-drop-placeholder flex-shrink-0 rounded-lg border-2 border-dashed border-indigo-600 dark:border-indigo-500 bg-indigo-500/10 dark:bg-indigo-500/20 w-[350px] xl:w-[400px] min-h-[74dvh] md:min-h-[78dvh] mx-1 flex items-center justify-center text-indigo-600 dark:text-indigo-400';
     this.boardDropPlaceholder.innerHTML = `<span class="text-sm font-medium">Drop here</span>`;
     this.draggedBoardElement = null;
+    this.boardsBeforeDrag = null; // To store board order before drag
     this.boardDragDropInitialized = false;
 
     // Initialize localStorage data if boards are not already set for this user.
@@ -158,6 +160,7 @@ class BoardManager {
         const draggedBoardIndex = e.currentTarget.dataset.boardIndex;
         e.dataTransfer.setData('application/boardify-board-index', draggedBoardIndex);
         e.dataTransfer.effectAllowed = 'move';
+        this.boardsBeforeDrag = [...this.boards]; // Snapshot board order
         setTimeout(() => {
           e.currentTarget.classList.add('dragging-board');
         }, 0);
@@ -166,6 +169,7 @@ class BoardManager {
       boardElement.addEventListener('dragend', (e) => {
         e.stopPropagation();
         e.currentTarget.classList.remove('dragging-board');
+        this.boardsBeforeDrag = null; // Clear snapshot
         const existingPlaceholder = this.boardsContainer.querySelector('.board-drop-placeholder');
         if (existingPlaceholder) {
           existingPlaceholder.remove();
@@ -275,18 +279,15 @@ class BoardManager {
   }
 
   getBoardDragAfterElement(x) {
-    const draggableBoards = [...this.boardsContainer.querySelectorAll('.board-draggable-item:not(.dragging-board):not(.board-drop-placeholder)')];
+    const draggableBoards = [...this.boardsContainer.querySelectorAll('.board-draggable-item:not(.dragging-board)')];
 
     let closest = null;
     let closestDistance = Number.POSITIVE_INFINITY;
 
     draggableBoards.forEach(boardEl => {
       const box = boardEl.getBoundingClientRect();
-      // Calculate distance from the cursor's X to the center of the board element
       const distance = x - (box.left + box.width / 2);
 
-      // If distance is negative, cursor is to the left of the board's center.
-      // We want the board whose center is closest to the right of the cursor.
       if (distance < 0 && Math.abs(distance) < closestDistance) {
         closestDistance = Math.abs(distance);
         closest = boardEl;
@@ -317,19 +318,10 @@ class BoardManager {
       const draggingBoard = this.boardsContainer.querySelector('.dragging-board');
       if (!draggingBoard) return;
 
-      // Make placeholder same height as the board being dragged (if reference stored)
-      // Or use fixed height matching boardElement.style if set, or from class.
-      // For simplicity, using class-defined height. The placeholder class has min-height.
-      // if (this.draggedBoardElement) {
-      //    this.boardDropPlaceholder.style.height = `${this.draggedBoardElement.offsetHeight}px`;
-      // }
-
-
       const afterElement = this.getBoardDragAfterElement(e.clientX);
       if (afterElement) {
         this.boardsContainer.insertBefore(this.boardDropPlaceholder, afterElement);
       } else {
-        // If no element to insert before, append to container, but not after "Add New Board" button
         const addBoardBtn = this.boardsContainer.querySelector('#add-new-board-btn');
         if (addBoardBtn) {
           this.boardsContainer.insertBefore(this.boardDropPlaceholder, addBoardBtn);
@@ -343,7 +335,6 @@ class BoardManager {
       if (!e.dataTransfer.types.includes('application/boardify-board-index')) {
         return;
       }
-      // Remove placeholder if cursor leaves the container bounds
       if (e.target === this.boardsContainer && !this.boardsContainer.contains(e.relatedTarget) && this.boardDropPlaceholder.parentNode) {
          this.boardDropPlaceholder.remove();
       }
@@ -385,63 +376,41 @@ class BoardManager {
 
       this.saveBoards();
 
-      // Task column re-mapping logic:
-      // Create a map of old_index -> new_index for boards
-      const newIndices = {};
-      this.boards.forEach((board, newIdx) => {
-          const oldIdx = this.boards.findIndex(b => b.title === board.title && b.themeId === board.themeId); // This assumes titles/themes are unique enough for this temporary map
-                                                                                              // A better way would be to assign unique IDs to boards if they don't have them.
-                                                                                              // For now, this is a simplified approach.
-                                                                                              // A more robust approach would be to use the original this.boards array before modification.
-                                                                                              // Let's assume boards array has been reordered and we need to map tasks
-                                                                                              // based on the new positions of board objects.
+      // === BEGIN NEW TASK COLUMN RE-MAPPING LOGIC ===
+      if (this.boardsBeforeDrag) {
+          let allTasks = JSON.parse(JSON.stringify(useTaskStore.getState().tasks)); // Deep copy for modification
+          let tasksModified = false;
 
-          // This mapping logic is complex and error-prone if board objects are not strictly identical
-          // or if we don't have a stable ID on boards themselves.
-          // The provided logic in the prompt for task remapping is more robust by iterating based on known dragged and target indices.
-          // Re-implementing the task re-mapping based on prompt's logic structure:
-      });
+          allTasks.forEach(task => {
+              if (typeof task.column === 'number' && task.column >= 0 && task.column < this.boardsBeforeDrag.length) {
+                  const originalBoardObjectRef = this.boardsBeforeDrag[task.column];
 
-      // Update task columns based on the new board order
-      const tempOldTaskColumns = this.taskManager.tasks.map(task => task.column); // Store old columns
-      const newBoardOrder = this.boards.map((board, newIndex) => {
-          // Find original index of this board before the drag-drop reorder
-          // This is tricky. The prompt's logic for task re-mapping is more direct:
-      });
+                  const newIndex = this.boards.findIndex(b =>
+                      // Using a more robust check if board objects might be cloned or if titles/themeIds are unique identifiers
+                      (originalBoardObjectRef.title === b.title && originalBoardObjectRef.themeId === b.themeId) || b === originalBoardObjectRef
+                  );
 
-      this.taskManager.tasks.forEach(task => {
-        if (task.column === draggedBoardIndex) {
-          task.column = -99; // Temporarily mark tasks from the dragged board
-        }
-      });
-
-      if (draggedBoardIndex < targetDropIndex) { // Board moved "right" (target index is now higher)
-        // Tasks in boards that were between old and new positions need their column index decreased
-        for (let i = draggedBoardIndex; i < targetDropIndex; i++) {
-          this.taskManager.tasks.forEach(task => {
-            if (task.column === i + 1) {
-              task.column = i;
-            }
+                  if (newIndex !== -1) {
+                      if (task.column !== newIndex) {
+                          task.column = newIndex;
+                          tasksModified = true;
+                      }
+                  } else {
+                      console.warn(`BoardManager: Board reference for task ${task.id} (original column ${task.column}, title "${originalBoardObjectRef ? originalBoardObjectRef.title : 'N/A'}") not found in new board order. Task column not remapped.`);
+                  }
+              } else {
+                   console.warn(`BoardManager: Task ${task.id} has an invalid or out-of-bounds original column index: ${task.column}. Cannot reliably remap.`);
+              }
           });
-        }
-      } else if (draggedBoardIndex > targetDropIndex) { // Board moved "left"
-        // Tasks in boards that were between new and old positions need their column index increased
-        for (let i = draggedBoardIndex; i > targetDropIndex; i--) {
-          this.taskManager.tasks.forEach(task => {
-            if (task.column === i - 1) {
-              task.column = i;
-            }
-          });
-        }
+
+          if (tasksModified) {
+              useTaskStore.getState().setAllTasks(allTasks); // Update the store with re-mapped tasks
+          }
+          this.boardsBeforeDrag = null; // Clear the snapshot
+      } else {
+          console.error("BoardManager: boardsBeforeDrag was not set. Task columns cannot be remapped.");
       }
-      // Assign new column index to tasks from the moved board
-      this.taskManager.tasks.forEach(task => {
-        if (task.column === -99) {
-          task.column = targetDropIndex;
-        }
-      });
-      this.taskManager.saveTasks();
-
+      // === END NEW TASK COLUMN RE-MAPPING LOGIC ===
 
       // Re-render all boards.
       if (this.uiManager && this.taskManager && this.dragDropManager) {
