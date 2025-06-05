@@ -667,52 +667,119 @@ class TaskManager {
         e.preventDefault();
         const touch = e.changedTouches[0];
         const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
-        const newColumnElement = elemBelow?.closest('.task-list');
+        const newColumnDomElement = elemBelow?.closest('.task-list');
         const taskId = taskElement.dataset.taskId;
-        const taskToMove = useTaskStore.getState().getTaskById(taskId);
 
-        if (!taskToMove) {
-            dragDropManager.handleDragEnd(taskElement);
-            console.warn(`Task with ID ${taskId} not found in store during touchend.`);
+        const localDragDropManager = this.dragDropManager;
+
+        if (!taskId) {
+            if (localDragDropManager) localDragDropManager.handleDragEnd(taskElement);
             return;
         }
 
-        if (newColumnElement) {
-            const oldColumnIndex = taskToMove.column;
-            const newColumnIndex = Number.parseInt(newColumnElement.dataset.index, 10);
+        const taskToMoveInitial = useTaskStore.getState().getTaskById(taskId);
+        if (!taskToMoveInitial) {
+            if (localDragDropManager) localDragDropManager.handleDragEnd(taskElement);
+            console.error("Task not found in store for touchend:", taskId);
+            return;
+        }
 
-            // DOM Manipulation (already done by this point or handled by placeholder logic)
-            if (oldColumnIndex !== newColumnIndex) {
-                 newColumnElement.appendChild(taskElement); // Ensure it's in the new column DOM
+        if (newColumnDomElement) {
+            const newColumnIndex = Number.parseInt(newColumnDomElement.dataset.index, 10);
+
+            const placeholder = newColumnDomElement.querySelector('.task-placeholder');
+            if (placeholder) {
+                newColumnDomElement.insertBefore(taskElement, placeholder);
             } else {
-                const placeholder = newColumnElement.querySelector('.task-placeholder');
-                if (placeholder) {
-                    newColumnElement.insertBefore(taskElement, placeholder);
+                newColumnDomElement.appendChild(taskElement);
+            }
+            // Placeholder removal is handled by localDragDropManager.handleDragEnd
+
+            let currentTasks = [...useTaskStore.getState().tasks];
+            const taskToMoveIndexInCurrentTasks = currentTasks.findIndex(t => t.id === taskId);
+            const taskDataForStore = { ...taskToMoveInitial, column: newColumnIndex };
+
+            if (taskToMoveIndexInCurrentTasks !== -1) {
+                currentTasks.splice(taskToMoveIndexInCurrentTasks, 1);
+            } else {
+                currentTasks = currentTasks.filter(t => t.id !== taskId);
+            }
+
+            const tasksInNewColumnDomOrder = Array.from(newColumnDomElement.querySelectorAll('.task:not(.task-placeholder)'))
+                                              .map(el => el.dataset.taskId);
+
+            const positionInDomColumn = tasksInNewColumnDomOrder.indexOf(taskId);
+            let finalInsertIndexInStoreArray = -1;
+
+            if (positionInDomColumn === -1) {
+                console.error("Consistency error: Dragged task not found in its target DOM column after move.");
+                let lastIndexOfColumn = -1;
+                for(let i = currentTasks.length - 1; i >= 0; i--) {
+                    if (currentTasks[i].column === newColumnIndex) {
+                        lastIndexOfColumn = i;
+                        break;
+                    }
+                }
+                finalInsertIndexInStoreArray = lastIndexOfColumn === -1 ? currentTasks.length : lastIndexOfColumn + 1;
+            } else if (tasksInNewColumnDomOrder.length === 1) {
+                let targetIdx = 0;
+                for (let i = 0; i < currentTasks.length; i++) {
+                    if (currentTasks[i].column >= newColumnIndex) {
+                        targetIdx = i;
+                        break;
+                    }
+                    targetIdx = i + 1;
+                }
+                finalInsertIndexInStoreArray = targetIdx;
+            } else if (positionInDomColumn === tasksInNewColumnDomOrder.length - 1) {
+                let lastExistingTaskOfColumn = -1;
+                for (let i = currentTasks.length - 1; i >= 0; i--) {
+                    if (currentTasks[i].column === newColumnIndex) {
+                        lastExistingTaskOfColumn = i;
+                        break;
+                    }
+                }
+                if (lastExistingTaskOfColumn !== -1) {
+                    finalInsertIndexInStoreArray = lastExistingTaskOfColumn + 1;
                 } else {
-                     newColumnElement.appendChild(taskElement); // Fallback
+                    let targetIdx = 0;
+                    for (let i = 0; i < currentTasks.length; i++) {
+                        if (currentTasks[i].column >= newColumnIndex) {
+                            targetIdx = i;
+                            break;
+                        }
+                        targetIdx = i + 1;
+                    }
+                    finalInsertIndexInStoreArray = targetIdx;
+                }
+            } else {
+                const nextTaskInDomId = tasksInNewColumnDomOrder[positionInDomColumn + 1];
+                finalInsertIndexInStoreArray = currentTasks.findIndex(t => t.id === nextTaskInDomId);
+                if (finalInsertIndexInStoreArray === -1) {
+                    let lastExistingTaskOfColumn = -1;
+                    for (let i = currentTasks.length - 1; i >= 0; i--) {
+                        if (currentTasks[i].column === newColumnIndex) {
+                            lastExistingTaskOfColumn = i;
+                            break;
+                        }
+                    }
+                    if (lastExistingTaskOfColumn !== -1) {
+                        finalInsertIndexInStoreArray = lastExistingTaskOfColumn + 1;
+                    } else {
+                        finalInsertIndexInStoreArray = currentTasks.length;
+                    }
                 }
             }
-            if (newColumnElement.querySelector('.task-placeholder')) {
-              newColumnElement.querySelector('.task-placeholder').remove();
+
+            if (finalInsertIndexInStoreArray === -1 ) {
+                finalInsertIndexInStoreArray = currentTasks.length;
             }
 
-            // Data Update
-            if (oldColumnIndex !== newColumnIndex) {
-                useTaskStore.getState().updateTask(taskId, { column: newColumnIndex });
-                // Full reordering for D&D is complex and will be handled by DragDropManager calling a store action.
-                // For simple touch-based column change, just updating the column is a first step.
-                // The store does not yet have a "reorderTaskInColumn" action.
-                // This means task order within the new column in the data array might not match DOM yet.
-            } else {
-                // Task dropped in the same column.
-                // Get DOM order and tell the store to reorder.
-                // This requires a new store action like `reorderTasks(orderedTaskIds, newColumnIndex)`
-                // For now, this part won't update the store's internal order perfectly for same-column touch drops.
-                // We'll call updateTask just to trigger a save if any other property were to change.
-                useTaskStore.getState().updateTask(taskId, { ...taskToMove }); // Effectively just triggers a save
-            }
+            currentTasks.splice(finalInsertIndexInStoreArray, 0, taskDataForStore);
+            useTaskStore.getState().setTasksOrder(currentTasks);
         }
-        dragDropManager.handleDragEnd(taskElement);
+
+        if (localDragDropManager) localDragDropManager.handleDragEnd(taskElement);
       }
     });
 
