@@ -7,7 +7,7 @@ function getPriorityClass(priority) {
       return 'bg-rose-300 dark:bg-rose-500 text-gray-800 dark:text-white';
     case 'medium':
       return 'bg-amber-300 dark:bg-amber-500 text-gray-800 dark:text-white';
-    default: // 'low' or undefined
+    default: // 'low', undefined, or any other value
       return 'bg-green-300 dark:bg-green-500 text-gray-800 dark:text-white';
   }
 }
@@ -44,9 +44,9 @@ export function TaskCard(task, eventHandlers) {
     `;
   }
 
-  // Due date display (basic, without overdue styling which TaskManager will handle)
+  // Due date display (basic structure; UIManager.applyTaskStyling will handle overdue text styling)
   const dueDateHtml = task.dueDate
-    ? `<p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Due: ${new Date(task.dueDate).toLocaleDateString()}</p>`
+    ? `<p class="text-sm text-gray-600 dark:text-gray-400 mt-1 task-due-date-display">Due: ${new Date(task.dueDate).toLocaleDateString()}</p>`
     : '';
 
   const assigneeHtml = task.assignee

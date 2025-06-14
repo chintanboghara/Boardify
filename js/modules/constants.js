@@ -1,6 +1,5 @@
 /**
  * Default board configurations.
- * Default board configurations.
  * Each board object includes a title and now a themeId for styling.
  */
 export const defaultBoards = [

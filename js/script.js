@@ -17,6 +17,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const signupForm = document.getElementById('signup-form');
   const userDisplay = document.getElementById('user-display');
   const userInfo = document.getElementById('user-info');
+  const loginErrorMessage = document.getElementById('login-error-message');
+  const signupErrorMessage = document.getElementById('signup-error-message');
+
+  // Helper function to show/hide error messages
+  const displayAuthError = (element, message) => {
+    if (element) {
+      element.textContent = message;
+      element.classList.remove('hidden');
+    }
+  };
+  const clearAuthError = (element) => {
+    if (element) {
+      element.textContent = '';
+      element.classList.add('hidden');
+    }
+  };
 
   // Function to update UI based on login state
   const updateUserUI = () => {
@@ -46,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Event Listeners for Modals
   if (loginBtn && loginModal && closeLoginModalBtn) {
     loginBtn.addEventListener('click', () => {
+      clearAuthError(loginErrorMessage);
       loginModal.classList.remove('hidden');
       loginModal.classList.add('flex');
     });
@@ -65,6 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (signupBtn && signupModal && closeSignupModalBtn) {
     signupBtn.addEventListener('click', () => {
+      clearAuthError(signupErrorMessage);
       signupModal.classList.remove('hidden');
       signupModal.classList.add('flex');
     });
@@ -101,6 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loginForm) {
     loginForm.addEventListener('submit', (event) => {
       event.preventDefault();
+      clearAuthError(loginErrorMessage);
       const username = document.getElementById('login-email').value; // Assuming email field is used for username
       const password = document.getElementById('login-password').value;
       const result = authManager.loginUser(username, password);
@@ -115,8 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.reload();
       } else {
         console.error('Login failed:', result.message);
-        // Display error message to the user (e.g., in the modal)
-        alert(`Login failed: ${result.message}`);
+        displayAuthError(loginErrorMessage, result.message);
       }
     });
   }
@@ -125,13 +143,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (signupForm) {
     signupForm.addEventListener('submit', (event) => {
       event.preventDefault();
+      clearAuthError(signupErrorMessage);
       const username = document.getElementById('signup-email').value; // Assuming email field is used for username
       const password = document.getElementById('signup-password').value;
       const confirmPassword = document.getElementById('signup-confirm-password').value;
 
       if (password !== confirmPassword) {
         console.error('Sign up error: Passwords do not match');
-        alert('Sign up error: Passwords do not match');
+        displayAuthError(signupErrorMessage, 'Passwords do not match.');
         return;
       }
 
@@ -147,8 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.reload();
       } else {
         console.error('Sign up failed:', result.message);
-        // Display error message to the user (e.g., in the modal)
-        alert(`Sign up failed: ${result.message}`);
+        displayAuthError(signupErrorMessage, result.message);
       }
     });
   }

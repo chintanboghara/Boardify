@@ -4,11 +4,9 @@
 class SearchManager {
   /**
    * @param {Object} taskManager - Instance managing task operations.
-   * @param {Object} uiManager - Instance managing UI updates (currently not used directly).
    */
-  constructor(taskManager, uiManager) {
+  constructor(taskManager) {
     this.taskManager = taskManager;
-    this.uiManager = uiManager;
     this.searchInput = null;
     this.searchInputMob = null;
   }
