@@ -2,8 +2,12 @@
 @import 'tailwindcss';
 
 /* 
-  Define a custom "dark" variant that applies styles 
-  when an element or any of its children have the .dark class.
+  Custom PostCSS-like variant definition for 'dark' mode.
+  This aims to apply dark styles more broadly when the '.dark' class is present
+  on an element itself or any of its ancestors (not just direct children).
+  It might be part of a specific project setup to ensure dark mode styles propagate
+  deeply through the component tree. Standard Tailwind `dark:` variants are typically
+  used for applying styles when a `.dark` class is on an ancestor (usually <html> or <body>).
 */
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -47,7 +51,7 @@
     scrollbar-color: #888 transparent;
   }
   .horizontal-scrollbar::-webkit-scrollbar {
-    width: 0;  /* Hides vertical scrollbar */
+    width: 0;  /* Effectively hides any potential vertical scrollbar, ensuring only the horizontal scrollbar is styled and visible for this class. */
     height: 2px;
   }
   .horizontal-scrollbar::-webkit-scrollbar-track {
@@ -56,15 +60,6 @@
   .horizontal-scrollbar::-webkit-scrollbar-thumb {
     background: #888;
     border-radius: 4px;
-  }
-
-  /* Ensure modals are centered and above other content */
-  .fixed.inset-0.z-50.items-center.justify-center {
-    display: none; /* Hidden by default, shown by JS */
-  }
-
-  .fixed.inset-0.z-50.flex.items-center.justify-center {
-    /* Styles for when modal is shown */
   }
 }
 

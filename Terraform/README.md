@@ -1,6 +1,8 @@
 # Terraform Configuration for Docker Infrastructure
 
-### tools and services are installed and configured:
+**Note:** The primary and most up-to-date instructions for using Terraform with this project can be found in the main [README.md](../README.md#running-with-docker-via-terraform) at the root of the project. This document serves as a quick command reference when you are already working within the `Terraform` directory.
+
+### Ensure the following tools and services are installed and configured:
 
 1. **Docker**  
     - Docker must be installed and running on your system.
@@ -9,7 +11,7 @@
     - Terraform must be installed to manage the infrastructure.
 
 3. **AWS Configure**  
-    - AWS S3 and DynamoDB for Terraform state management.
+    - AWS CLI: Configured via `aws configure` to provide credentials for AWS. The Terraform setup in this project is pre-configured to use AWS S3 and DynamoDB for backend state storage (these AWS resources may need to be created separately as detailed in the main project README).
     - Run:  
       ```sh
       aws configure
