@@ -593,25 +593,19 @@ class TaskManager {
       if (!isDoneColumn) {
         if (dayDiff < 0) { // Overdue
           taskElement.classList.add('overdue-task', 'border-2', 'border-red-500');
-          isOverdue = true;
         } else if (dayDiff === 0) { // Due today
           taskElement.classList.add('due-today', 'border-2', 'border-blue-500');
-          isOverdue = false; 
         } else if (dayDiff > 0 && dayDiff <= 3) { // Due soon
           taskElement.classList.add('due-soon', 'border-2', 'border-yellow-500');
-          isOverdue = false;
         } else {
           // Not overdue, not due today, not due soon (or no specific state)
-          isOverdue = false;
           // No border classes needed here as they were cleared
         }
       } else {
         // Task is in a "Done" column, not considered for these visual cues
-        isOverdue = false;
       }
     } else {
       // No due date or boardManager not available
-      isOverdue = false;
     }
 
     targetColumn.appendChild(taskElement);
@@ -906,7 +900,6 @@ class TaskManager {
     }
 
     const originalSubtaskTitle = subtask.title;
-    const originalSubtaskTitle = subtask.title;
     const newSubtasks = parentTask.subtasks.map(sub =>
       sub.id === subtaskId ? { ...sub, title: newTitle } : sub
     );
@@ -977,7 +970,6 @@ class TaskManager {
     }
 
     const subtaskToDelete = parentTask.subtasks.find(sub => sub.id === subtaskId);
-    const subtaskToDelete = parentTask.subtasks.find(sub => sub.id === subtaskId);
     if (!subtaskToDelete) {
         console.warn(`Subtask with ID ${subtaskId} not found for deletion in task ${parentTaskId}.`);
         return;
@@ -1033,24 +1025,6 @@ class TaskManager {
       ...(task.activityLog || [])
     ];
     useTaskStore.getState().updateTask(taskId, { activityLog: newActivityLog });
-  }
-
-  /**
-      return;
-    }
-    // Ensure activityLog array exists (should be guaranteed by constructor/addTask)
-    if (!Array.isArray(task.activityLog)) {
-      console.error(`activityLog array missing for task: ${taskId}. Initializing.`);
-      task.activityLog = [];
-    }
-    const logEntry = {
-      id: `log_${Date.now().toString()}_${Math.random().toString(36).substring(2, 7)}`,
-      timestamp: new Date().toISOString(),
-      type: activityType,
-      details: detailsString
-    };
-    task.activityLog.unshift(logEntry);
-    // No this.saveTasks() here, as the calling method will handle it.
   }
 
   /**
