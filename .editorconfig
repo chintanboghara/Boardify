@@ -5,7 +5,7 @@ root = true
 
 [*]
 # Use UTF-16 little-endian encoding for all files.
-charset = utf-16le
+charset = utf-8
 # Use LF for line endings.
 end_of_line = lf
 # Set indent size to 2 spaces.

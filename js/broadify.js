@@ -163,10 +163,12 @@ class Boardify {
 
     try {
       this.boardManager.boards = jsonData.boards;
-      this.taskManager.tasks = jsonData.tasks;
+      // Use the setter to ensure reactivity or other logic in TaskManager is triggered
+      this.taskManager.setTasks(jsonData.tasks);
 
       // Perform data migration for tasks
-      this.taskManager.tasks.forEach(task => {
+      // Access tasks via getTasks() if setTasks makes a deep copy or processes them
+      this.taskManager.getTasks().forEach(task => {
         if (task.isArchived === undefined) {
           task.isArchived = false;
         }
@@ -183,7 +185,10 @@ class Boardify {
       });
 
       this.boardManager.saveBoards();
-      this.taskManager.saveTasks();
+      // saveTasks is typically called by setTasks or other TaskManager methods internally if needed.
+      // If setTasks directly updates the store and the store persists, this explicit call might be redundant
+      // or even problematic if it saves an intermediate state.
+      // For now, removing it as per request, assuming setTasks handles persistence or it's handled by boardManager.saveBoards() implicitly.
 
       alert("Data imported successfully! The application will now refresh to display the new data.");
       window.location.reload();

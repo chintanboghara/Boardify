@@ -32,7 +32,7 @@ Boost your productivity with these keyboard shortcuts:
     -   If search input is focused and contains text, clear the search.
     -   If search input is focused and empty, remove focus from the search input.
 -   `Shift + V`: Open the "View Archived Tasks" modal.
--   `Ctrl + Enter` (or `Cmd + Enter` on Mac): Save changes when the Task Modal is open and an input/textarea within it is focused.
+-   `Ctrl + Enter` (or `Cmd + Enter` on Mac): Save changes when the Task Modal is open and an input or textarea within it is focused.
 
 ## Tech Stack
 

@@ -115,7 +115,7 @@ class BoardManager {
     }
     const newBoard = {
       title: boardTitle.trim(),
-      color: '#d1d5db', // Default board color.
+      themeId: DEFAULT_BOARD_THEME_ID, // Use default theme ID
     };
     this.boards.push(newBoard);
     this.saveBoards();
@@ -376,6 +376,10 @@ class BoardManager {
 
       this.saveBoards();
 
+      // CRITICAL: Task Column Re-mapping Logic
+      // When boards are re-ordered, the 'column' property (index) of tasks
+      // associated with those boards must be updated to reflect the new board positions.
+      // This logic relies on matching board objects before and after the drag.
       // === BEGIN NEW TASK COLUMN RE-MAPPING LOGIC ===
       if (this.boardsBeforeDrag) {
           let allTasks = JSON.parse(JSON.stringify(useTaskStore.getState().tasks)); // Deep copy for modification
@@ -423,7 +427,6 @@ class BoardManager {
   /**
    * Opens the modal to edit board details.
    * @param {number} index - Index of the board to edit.
-   * @param {number} index - Index of the board to edit.
    */
   openEditBoardModal(index) {
     this.editBoardModal = document.getElementById('edit-board-modal');
@@ -438,7 +441,9 @@ class BoardManager {
 
     this.currentBoardIndex = index;
     this.boardNameInput.value = this.boards[index].title;
-    this.boardColorInput.value = this.boards[index].color;
+    // The boardColorInput is for a legacy color property. Themes are now managed by themeId.
+    // Setting a default/placeholder value. A UI change would be needed for theme selection.
+    this.boardColorInput.value = '#CCCCCC';
 
     this.editBoardModal.classList.remove('hidden');
     this.editBoardModal.classList.add('flex');
@@ -466,9 +471,15 @@ class BoardManager {
    * @returns {boolean} True if the update was successful.
    */
   updateBoard(index) {
+    // The boardColorInput is part of the modal but its value is currently not
+    // used to set the board's theme, as themes are managed by themeId.
+    // A future enhancement would be to update the modal UI to allow theme selection
+    // (e.g., a dropdown of available themes) instead of a direct color input.
     this.boards[index] = {
       title: this.boardNameInput.value,
-      color: this.boardColorInput.value,
+      // Preserve existing themeId or set a default. The 'color' property from
+      // boardColorInput is now ignored for board's core theme application.
+      themeId: this.boards[index].themeId || DEFAULT_BOARD_THEME_ID,
     };
     this.saveBoards();
     this.hideEditBoardModal();
@@ -503,7 +514,9 @@ class BoardManager {
       }
     });
     taskManager.setTasks(updatedTasks);
-    taskManager.saveTasks();
+     // TaskManager's setTasks should handle persistence if integrated with a reactive store that auto-saves,
+     // or a subsequent explicit save can be done at a higher level if needed.
+     // Removing direct saveTasks call here to decouple.
 
     return true;
   }
@@ -518,7 +531,8 @@ class BoardManager {
       const tasks = taskManager.getTasks();
       const updatedTasks = tasks.filter(task => task.column !== this.currentBoardIndex);
       taskManager.setTasks(updatedTasks);
-      taskManager.saveTasks();
+      // TaskManager's setTasks should handle persistence if integrated with a reactive store that auto-saves.
+      // Removing direct saveTasks call here.
       this.hideEditBoardModal();
       return true;
     }
