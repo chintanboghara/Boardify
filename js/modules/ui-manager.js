@@ -71,24 +71,6 @@ class UIManager {
       );
     }
 
-    // Attach event listeners to non-submit buttons inside the task modal to close it.
-    if (this.taskModal) {
-      const closeModalButtons = this.taskModal.querySelectorAll('button:not([type="submit"])');
-      closeModalButtons.forEach(button => {
-        button.addEventListener('click', () => {
-          this.taskManager.hideTaskModal();
-        });
-      });
-    }
-
-    // Handle task form submission.
-    if (this.taskForm) {
-      this.taskForm.addEventListener('submit', e => {
-        e.preventDefault();
-        this.taskManager.handleTaskFormSubmit();
-      });
-    }
-
     // Event listener for sort by due date buttons
     const boardContainer = document.querySelector('.board');
     if (boardContainer) {
