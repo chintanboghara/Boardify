@@ -8,20 +8,15 @@ import UIManager from './modules/ui-manager.js';
 class Boardify {
   constructor() {
     this.boardManager = new BoardManager();
-    this.taskManager = new TaskManager();
+    this.dragDropManager = new DragDropManager();
+    this.taskManager = new TaskManager(this.dragDropManager);
     this.themeManager = new ThemeManager();
-    this.dragDropManager = new DragDropManager(this.taskManager);
     this.uiManager = new UIManager(
       this.boardManager,
       this.taskManager,
       this.dragDropManager,
     );
     this.searchManager = new SearchManager(this.taskManager, this.uiManager);
-
-    this.taskPlaceholder = document.createElement('div');
-    this.taskPlaceholder.className =
-      'task-placeholder border-2 border-dashed border-gray-400 dark:border-gray-600 rounded-md p-4 bg-gray-50 dark:bg-[#202227]';
-    this.taskClone = null;
   }
 
   init() {
