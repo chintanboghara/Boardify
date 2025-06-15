@@ -37,7 +37,7 @@ Make sure you have the following installed on your machine:
 
 1. **Clone the repository:**
     ```bash
-    git clone https://github.com/chintanboghara/boardify.git
+    git clone https://github.com/chintanboghara/Boardify.git
     ```
 
 2. **Navigate to the project directory:**
