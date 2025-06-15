@@ -10,8 +10,10 @@ A simple, intuitive, and fully responsive Kanban board to manage your tasks effi
 - **Search & Filter** tasks by title or label  
 - **Multiple Boards** support for different projects  
 - **Dark/Light Theme** toggle  
-- **Local Storage Persistence**—no backend required  
+- **Local Storage Persistence** no backend required  
 - **Fully Responsive** design for desktop & mobile  
+
+**Note:** All task data is stored locally in your browser's storage. This means your tasks are private and not shared across devices or users.
 
 ## Tech Stack
 
@@ -35,14 +37,12 @@ A simple, intuitive, and fully responsive Kanban board to manage your tasks effi
    cd Boardify
    ```
 
-2. **Install dependencies**
-
+2. **Install dependencies**  
    ```bash
    pnpm install
    ```
 
-3. **Start the development server**
-
+3. **Start the development server**  
    ```bash
    pnpm dev
    ```
@@ -51,63 +51,56 @@ A simple, intuitive, and fully responsive Kanban board to manage your tasks effi
 
 ## Docker & Terraform Deployment
 
-Use Terraform to spin up a Docker-hosted instance of Boardify. Terraform is configured to store its state in AWS S3 & DynamoDB.
+To deploy Boardify locally using Docker and Terraform, follow these steps. Terraform is configured to store its state in AWS S3 & DynamoDB.
 
 ### AWS Backend Configuration
 
 1. Create an S3 bucket and DynamoDB table for Terraform state locking.
-2. Configure your AWS CLI credentials:
-
+2. Configure your AWS CLI credentials:  
    ```bash
    aws configure
    ```
 
 ### Terraform Commands
 
-Navigate to the `Terraform/` directory:
-
+Navigate to the `Terraform/` directory:  
 ```bash
 cd Terraform
 ```
 
-1. **Initialize Terraform**
-
+1. **Initialize Terraform**  
    ```bash
    terraform init
    ```
-
    > Downloads providers, modules, and configures remote state.
-2. **Format your .tf files**
 
+2. **Format your .tf files**  
    ```bash
    terraform fmt
    ```
-3. **Validate configuration**
 
+3. **Validate configuration**  
    ```bash
    terraform validate
    ```
-4. **Plan infrastructure changes**
 
+4. **Plan infrastructure changes**  
    ```bash
    terraform plan
    ```
-5. **Apply changes**
 
+5. **Apply changes**  
    ```bash
    terraform apply
    ```
+   > Confirm with `yes` when prompted.  
+   Open the provided `access_url` (e.g., `http://localhost:8080`) in your web browser to access Boardify.
 
-   > Confirm with `yes` when prompted.
-6. **Access the deployed app**
-   Terraform will output an `access_url` (e.g., `http://localhost:8080`).
-7. **Destroy infrastructure**
-
+6. **Destroy infrastructure**  
    ```bash
    terraform destroy
    ```
-
-   > Confirm with `yes` to tear down all resources.
+   > Confirm with `yes` to tear down all resources. This will stop and remove the Docker container.
 
 ## Built With
 
