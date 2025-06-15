@@ -1,6 +1,6 @@
 # Boardify
 
-A simple, intuitive, and fully responsive Kanban board to manage your tasks efficiently—powered by modern web technologies and easily deployable via Docker and Terraform.
+A simple, intuitive, and fully responsive Kanban board to manage your tasks efficiently, powered by modern web technologies and easily deployable via Docker and Terraform.
 
 ## Features
 
