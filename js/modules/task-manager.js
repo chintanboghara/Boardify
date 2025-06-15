@@ -1,5 +1,6 @@
 import DragDropManager from './drag-drop-manager.js';
 import { TaskCard } from '../components/TaskCard.js';
+import TaskModalComponent from '../components/TaskModalComponent.js';
 import { defaultTasks } from './constants.js';
 import { useTaskStore } from '../store/taskStore.js';
 
@@ -19,11 +20,15 @@ class TaskManager {
     // For now, renderAllTasks/searchTasks will set it before rendering.
     this.filteredTasks = [];
     this.editingTaskId = null;
-    this.taskModal = null;
-    this.taskForm = null;
     // Cache a single instance of DragDropManager for reuse.
     this.dragDropManager = null;
     this.uiManager = null; // Placeholder for UIManager instance
+
+    this.taskModalComponent = new TaskModalComponent({
+        onSave: this._handleModalSave.bind(this),
+        onCancel: this._handleModalCancel.bind(this),
+        onArchiveRequest: this._handleModalArchiveRequest.bind(this)
+    });
   }
 
   /**
@@ -85,321 +90,150 @@ class TaskManager {
    * @param {Object|null} [task=null] - The task to edit; if null, a new task is created.
    */
   openTaskModal(index, task = null) {
-    this.taskModal = document.getElementById('task-modal');
-    this.taskForm = document.getElementById('task-form');
-
-    if (!this.taskModal || !this.taskForm) {
-      console.error('Task modal or form not found in the DOM.');
-      return;
-    }
-
-    this.taskModal.classList.remove('hidden');
-    this.taskModal.classList.add('flex');
-    this.taskForm.dataset.targetColumn = index;
-
-    const archiveTaskBtn = document.getElementById('archive-task-modal-btn');
-
-    if (task) {
-      // Populate form fields with task data for editing.
-      this.editingTaskId = task.id;
-      document.getElementById('task-title').value = task.title;
-      document.getElementById('task-description').value = task.description || '';
-      document.getElementById('task-priority').value = task.priority;
-      document.getElementById('task-due-date').value = task.dueDate || '';
-      document.getElementById('task-assignee').value = task.assignee || '';
-      this.taskModal.querySelector('h3').textContent = 'Edit Task';
-    } else {
-      // Reset the form for new task creation.
-      this.editingTaskId = null;
-      this.taskForm.reset();
-      this.taskModal.querySelector('h3').textContent = 'Add New Task';
-      // Clear subtask list for new tasks
-      const subtaskListElement = document.getElementById('subtask-list');
-      if (subtaskListElement) {
-        subtaskListElement.innerHTML = '';
-      }
-    }
-
-    // Render subtasks if editing an existing task
-    if (task && task.id) {
-      this._renderSubtasks(task.id);
-    }
-
-    // Event Listeners for Subtasks
-    // Ensure to remove existing listeners before adding new ones to prevent duplication
-    // if openTaskModal can be called multiple times for the same modal instance.
-    // However, since the modal is likely recreated or listeners are specific to its content,
-    // this might be simpler. For robustness, manage listeners carefully.
-
-    const addSubtaskBtn = document.getElementById('add-subtask-btn');
-    const newSubtaskTitleInput = document.getElementById('new-subtask-title');
-    const subtaskListElement = document.getElementById('subtask-list');
-
-    // Handler for adding a subtask
-    // Store handlers to remove them later if necessary, or use .onclick for simplicity if only one handler.
-    // Using a named function allows for easier removal if openTaskModal is called multiple times.
-    const handleAddSubtask = () => {
-      const title = newSubtaskTitleInput.value.trim();
-      if (!title) {
-        alert('Subtask title cannot be empty.');
-        return;
-      }
-      if (!this.editingTaskId) {
-        alert('Please save the main task before adding subtasks.');
-        return;
-      }
-      this.addSubtask(this.editingTaskId, title);
-      this._renderSubtasks(this.editingTaskId);
-      newSubtaskTitleInput.value = '';
-    };
-
-    // Remove previous listener before adding a new one to avoid duplicates
-    if (addSubtaskBtn._clickHandler) {
-      addSubtaskBtn.removeEventListener('click', addSubtaskBtn._clickHandler);
-    }
-    addSubtaskBtn._clickHandler = handleAddSubtask; // Store reference for potential removal
-    addSubtaskBtn.addEventListener('click', handleAddSubtask);
-
-
-    // Handler for subtask list interactions (toggle, delete)
-    const handleSubtaskListClick = (event) => {
-      if (!this.editingTaskId) return;
-
-      const target = event.target;
-      const subtaskLi = target.closest('li');
-      if (!subtaskLi || !subtaskLi.dataset.subtaskId) return;
-      
-      const subtaskId = subtaskLi.dataset.subtaskId;
-
-      if (target.classList.contains('subtask-checkbox')) {
-        this.toggleSubtaskCompletion(this.editingTaskId, subtaskId);
-        this._renderSubtasks(this.editingTaskId);
-      } else if (target.closest('.subtask-delete-btn')) {
-        this.deleteSubtask(this.editingTaskId, subtaskId);
-        this._renderSubtasks(this.editingTaskId);
-      }
-    };
-    
-    if (subtaskListElement._clickHandler) {
-        subtaskListElement.removeEventListener('click', subtaskListElement._clickHandler);
-    }
-    subtaskListElement._clickHandler = handleSubtaskListClick;
-    subtaskListElement.addEventListener('click', handleSubtaskListClick);
-
-    // Render Activity Log if editing an existing task
-    if (task && task.id) {
-      this._renderActivityLog(task.id);
-    } else {
-      // Clear activity log list for new tasks
-      const activityLogListElement = document.getElementById('activity-log-list');
-      if (activityLogListElement) {
-        activityLogListElement.innerHTML = '';
-      }
-    }
-
-    // Configure Archive/Unarchive button
-    if (archiveTaskBtn) {
-      if (task && task.id && !task.isArchived) { // Editing an existing, active task
-        archiveTaskBtn.classList.remove('hidden');
-        archiveTaskBtn.innerHTML = '<i class="fas fa-archive mr-1 sm:mr-2"></i> <span class="hidden sm:inline">Archive Task</span><span class="sm:hidden">Archive</span>';
-        archiveTaskBtn.title = 'Archive Task';
-
-        if (archiveTaskBtn._clickHandler) {
-          archiveTaskBtn.removeEventListener('click', archiveTaskBtn._clickHandler);
-        }
-        archiveTaskBtn._clickHandler = () => {
-          if (this.editingTaskId) {
-            this.archiveTask(this.editingTaskId);
-            this.hideTaskModal();
-          }
-        };
-        archiveTaskBtn.addEventListener('click', archiveTaskBtn._clickHandler);
-      } else if (task && task.id && task.isArchived) { // Editing an existing, ARCHIVED task
-        archiveTaskBtn.classList.remove('hidden');
-        archiveTaskBtn.innerHTML = '<i class="fas fa-box-open mr-1 sm:mr-2"></i> <span class="hidden sm:inline">Unarchive Task</span><span class="sm:hidden">Unarchive</span>';
-        archiveTaskBtn.title = 'Unarchive Task';
-
-        if (archiveTaskBtn._clickHandler) {
-          archiveTaskBtn.removeEventListener('click', archiveTaskBtn._clickHandler);
-        }
-        archiveTaskBtn._clickHandler = () => {
-          if (this.editingTaskId) {
-            this.unarchiveTask(this.editingTaskId);
-            this.hideTaskModal();
-            // TODO: Refresh relevant views (archived list, potentially main board)
-          }
-        };
-        archiveTaskBtn.addEventListener('click', archiveTaskBtn._clickHandler);
-      } else { // New task or other cases
-        archiveTaskBtn.classList.add('hidden');
-        if (archiveTaskBtn._clickHandler) {
-          archiveTaskBtn.removeEventListener('click', archiveTaskBtn._clickHandler);
-          archiveTaskBtn._clickHandler = null;
-        }
-      }
-    }
-  }
-  
-  /**
-   * Private helper method to render subtasks in the modal.
-   * @param {string} parentTaskId - The ID of the parent task.
-   */
-  _renderSubtasks(parentTaskId) {
-    const parentTask = useTaskStore.getState().getTaskById(parentTaskId);
-    const subtaskListElement = document.getElementById('subtask-list');
-
-    if (!parentTask || !subtaskListElement) {
-      if (subtaskListElement) subtaskListElement.innerHTML = ''; // Clear if no parent task but list exists
-      return;
-    }
-
-    subtaskListElement.innerHTML = ''; // Clear existing subtasks
-
-    if (parentTask.subtasks && parentTask.subtasks.length > 0) {
-      parentTask.subtasks.forEach(subtask => {
-        const li = document.createElement('li');
-        li.className = `flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded-md`;
-        li.dataset.subtaskId = subtask.id; // Set data-subtask-id on the li
-
-        li.innerHTML = `
-          <div class="flex items-center">
-            <input type="checkbox" class="subtask-checkbox form-checkbox h-4 w-4 text-indigo-600 rounded border-gray-300 dark:border-gray-500 dark:bg-gray-600 focus:ring-indigo-500 dark:focus:ring-indigo-400" ${subtask.completed ? 'checked' : ''}>
-            <span class="ml-2 text-sm text-gray-800 dark:text-gray-200 ${subtask.completed ? 'line-through' : ''}">${subtask.title}</span>
-          </div>
-          <button type="button" class="subtask-delete-btn text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-500">
-            <i class="fas fa-trash-alt text-xs"></i>
-          </button>
-        `;
-        // The checkbox and delete button don't strictly need individual data-subtask-id if we use closest('li').dataset.subtaskId
-        subtaskListElement.appendChild(li);
-      });
-    }
+    this.editingTaskId = task ? task.id : null;
+    this.taskModalComponent.show(task, index);
   }
 
   /**
    * Hides the task modal.
    */
   hideTaskModal() {
-    this.taskModal = document.getElementById('task-modal');
-    if (this.taskModal) {
-      this.taskModal.classList.add('hidden');
-      this.taskModal.classList.remove('flex');
-    }
+    this.taskModalComponent.hide();
   }
 
-  /**
-   * Handles the submission of the task form by either adding a new task or updating an existing one.
-   */
-  handleTaskFormSubmit() {
-    const title = document.getElementById('task-title').value.trim();
-    const description = document.getElementById('task-description').value.trim();
-    const priority = document.getElementById('task-priority').value;
-    const dueDate = document.getElementById('task-due-date').value;
-    const assignee = document.getElementById('task-assignee').value.trim();
-    const columnIndex = Number.parseInt(this.taskForm.dataset.targetColumn, 10);
-
-    if (!title) {
-      alert('Task title cannot be empty.');
-      return;
-    }
-
-    if (this.editingTaskId) {
-      this.updateTask(this.editingTaskId, title, description, priority, dueDate, assignee);
+  _handleModalSave(taskData, isEditing, targetColumnIndex) {
+    if (isEditing) {
+        if (!taskData.id) {
+            console.error("Task update requested without an ID.", taskData);
+            alert("Error: Could not update task. Task ID missing.");
+            return;
+        }
+        this.updateTask(taskData.id, taskData);
     } else {
-      this.addTask(title, description, priority, dueDate, assignee, columnIndex);
+        this.addTask(taskData, targetColumnIndex);
     }
+    this.taskModalComponent.hide();
+  }
 
-    this.hideTaskModal();
+  _handleModalCancel() {
+    this.taskModalComponent.hide();
+  }
+
+  _handleModalArchiveRequest(taskId, currentIsArchived) {
+    if (currentIsArchived) {
+        this.unarchiveTask(taskId);
+    } else {
+        this.archiveTask(taskId);
+    }
+    this.taskModalComponent.hide();
+    if (this.uiManager && typeof this.uiManager.refreshArchivedTasksModalIfOpen === 'function') {
+        this.uiManager.refreshArchivedTasksModalIfOpen();
+    }
   }
 
   /**
    * Adds a new task.
-   * @param {string} title - Task title.
-   * @param {string} description - Task description.
-   * @param {string} priority - Task priority.
-   * @param {string} dueDate - Task due date.
-   * @param {string} assignee - Task assignee.
-   * @param {number} columnIndex - Board column index.
+   * @param {object} taskData - Data for the new task from the modal.
+   * @param {number} columnIndexFromModal - Board column index.
    */
-  addTask(title, description, priority, dueDate, assignee, columnIndex) {
+  addTask(taskData, columnIndexFromModal) {
     const newTask = {
-      id: Date.now().toString(),
-      title,
-      description,
-      priority,
-      dueDate,
-      assignee,
-      column: columnIndex,
-      subtasks: [],
-      activityLog: [],
-      attachments: [],
+      id: Date.now().toString(), // Generate new ID
+      title: taskData.title,
+      description: taskData.description,
+      priority: taskData.priority,
+      dueDate: taskData.dueDate,
+      assignee: taskData.assignee,
+      column: columnIndexFromModal,
+      subtasks: taskData.subtasks || [],
+      activityLog: [{ id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`, timestamp: new Date().toISOString(), type: 'TASK_CREATED', details: 'Task was created.' }],
+      attachments: taskData.attachments || [],
       isArchived: false
     };
     useTaskStore.getState().addTask(newTask);
-    this._logActivity(newTask.id, 'TASK_CREATED', 'Task was created.');
+    // _logActivity is implicitly called by updateTask if an initial activityLog is added,
+    // but if not, or for the very first "Task Created" log, it can be direct.
+    // The above definition directly includes the creation log.
 
-    // DOM update for the new task (will be store-driven eventually)
+    // DOM update for the new task
     const taskLists = document.querySelectorAll('.task-list');
-    if (columnIndex >= 0 && columnIndex < taskLists.length) {
-      const targetColumnElement = taskLists[columnIndex];
-      this.renderTask(newTask, targetColumnElement);
+    if (columnIndexFromModal >= 0 && columnIndexFromModal < taskLists.length) {
+      const targetColumnElement = taskLists[columnIndexFromModal];
+      // It's better to render the task from the store to ensure consistency
+      const taskFromStore = useTaskStore.getState().getTaskById(newTask.id);
+      if (taskFromStore) {
+        this.renderTask(taskFromStore, targetColumnElement);
+      } else {
+        console.error(`Newly added task ${newTask.id} not found in store immediately after add.`);
+      }
     } else {
-      console.warn(`Attempted to add task to an invalid column index: ${columnIndex}. Task data saved, but not rendered to a specific column.`);
+      console.warn(`Attempted to add task to an invalid column index: ${columnIndexFromModal}. Task data saved, but not rendered to a specific column.`);
     }
-    // No explicit saveTasks() call needed here, store action handles it.
+  }
+
+
+  _logFieldChanges(taskId, originalTask, newData) {
+    const fieldsToCompare = ['title', 'description', 'priority', 'dueDate', 'assignee'];
+    fieldsToCompare.forEach(field => {
+        if (originalTask[field] !== newData[field]) {
+            let logDetail = '';
+            const originalValue = originalTask[field] || 'none';
+            const newValue = newData[field] || 'none';
+            if (field === 'description') {
+                logDetail = `Description updated.`; // Keep it simple for potentially long text
+            } else {
+                logDetail = `${field.charAt(0).toUpperCase() + field.slice(1)} changed from "${originalValue}" to "${newValue}".`;
+            }
+            this._logActivity(taskId, 'FIELD_UPDATED', logDetail);
+        }
+    });
+
+    // Basic subtask change logging (more granular logging is handled by component for its UI)
+    if (JSON.stringify(originalTask.subtasks) !== JSON.stringify(newData.subtasks)) {
+        this._logActivity(taskId, 'SUBTASK_ACTIVITY', 'Subtasks were updated.');
+    }
+
+    // Basic attachment change logging
+    if (JSON.stringify(originalTask.attachments) !== JSON.stringify(newData.attachments)) {
+        this._logActivity(taskId, 'ATTACHMENT_ACTIVITY', 'Attachments were updated.');
+    }
   }
 
   /**
    * Updates an existing task.
    * @param {string} taskId - ID of the task to update.
-   * @param {string} title - New title.
-   * @param {string} description - New description.
-   * @param {string} priority - New priority.
-   * @param {string} dueDate - New due date.
-   * @param {string} assignee - New assignee.
+   * @param {object} fullTaskDataFromModal - The full task data from the modal.
    */
-  updateTask(taskId, title, description, priority, dueDate, assignee) {
-    const taskToUpdate = useTaskStore.getState().getTaskById(taskId);
-    if (taskToUpdate) {
-      // Important: Log activity based on the task *before* updates for accurate "from X to Y"
-      const originalTaskForLog = { ...taskToUpdate }; // Shallow copy for logging
-
+  updateTask(taskId, fullTaskDataFromModal) {
+    const originalTask = useTaskStore.getState().getTaskById(taskId);
+    if (originalTask) {
       const updates = {
-        title,
-        description,
-        priority,
-        dueDate,
-        assignee,
+        title: fullTaskDataFromModal.title,
+        description: fullTaskDataFromModal.description,
+        priority: fullTaskDataFromModal.priority,
+        dueDate: fullTaskDataFromModal.dueDate,
+        assignee: fullTaskDataFromModal.assignee,
+        subtasks: fullTaskDataFromModal.subtasks,
+        attachments: fullTaskDataFromModal.attachments,
+        // column and isArchived are handled by other dedicated methods or drag-n-drop
       };
       useTaskStore.getState().updateTask(taskId, updates);
 
-      // Log field changes by comparing with the state before update
-      const updatedTaskForLog = useTaskStore.getState().getTaskById(taskId); // Get the task after update for "to Y" part
+      this._logFieldChanges(taskId, originalTask, fullTaskDataFromModal);
 
-      if (originalTaskForLog.title !== updatedTaskForLog.title) {
-        this._logActivity(taskId, 'FIELD_UPDATED', `Title changed from "${originalTaskForLog.title}" to "${updatedTaskForLog.title}".`);
-      }
-      if (originalTaskForLog.description !== updatedTaskForLog.description) {
-        this._logActivity(taskId, 'FIELD_UPDATED', `Description updated.`);
-      }
-      if (originalTaskForLog.priority !== updatedTaskForLog.priority) {
-        this._logActivity(taskId, 'FIELD_UPDATED', `Priority changed from "${originalTaskForLog.priority}" to "${updatedTaskForLog.priority}".`);
-      }
-      if (originalTaskForLog.dueDate !== updatedTaskForLog.dueDate) {
-        this._logActivity(taskId, 'FIELD_UPDATED', `Due date changed from "${originalTaskForLog.dueDate || 'none'}" to "${updatedTaskForLog.dueDate || 'none'}".`);
-      }
-      if (originalTaskForLog.assignee !== updatedTaskForLog.assignee) {
-        this._logActivity(taskId, 'FIELD_UPDATED', `Assignee changed from "${originalTaskForLog.assignee || 'none'}" to "${updatedTaskForLog.assignee || 'none'}".`);
-      }
-
-      // DOM update (for now, will be store-driven eventually)
+      // DOM update
       const taskElement = document.getElementById(`task-${taskId}`);
-      if (taskElement && taskElement.parentElement) {
+      const updatedTaskFromStore = useTaskStore.getState().getTaskById(taskId); // Get the final state
+      if (taskElement && taskElement.parentElement && updatedTaskFromStore) {
         const parentColumn = taskElement.parentElement;
         taskElement.remove();
-        this.renderTask(updatedTaskForLog, parentColumn); // Render with the updated task data
+        this.renderTask(updatedTaskFromStore, parentColumn);
+      } else if (updatedTaskFromStore) { // Task exists but element not found, maybe it's on an inactive board view
+        console.warn(`Task element task-${taskId} not found for DOM update, but task data was updated in store.`);
+         // Potentially call renderAllTasks() or a more targeted refresh if the updated task should be visible
+        this.renderAllTasks(); // Fallback to full re-render if unsure
       } else {
-        console.warn(`Task element task-${taskId} not found for DOM update.`);
+         console.error(`Task ${taskId} not found in store after update operation.`);
       }
     } else {
       console.warn(`Task with ID ${taskId} not found for update.`);
@@ -1012,139 +846,6 @@ class TaskManager {
       ...(task.activityLog || [])
     ];
     useTaskStore.getState().updateTask(taskId, { activityLog: newActivityLog });
-  }
-
-  /**
-   * Private helper method to render the activity log in the modal.
-   * @param {string} parentTaskId - The ID of the parent task.
-   */
-  _renderActivityLog(parentTaskId) {
-    const parentTask = useTaskStore.getState().getTaskById(parentTaskId);
-    const activityLogListElement = document.getElementById('activity-log-list');
-
-    if (!activityLogListElement) {
-      console.error('Activity log list element not found.');
-      return;
-    }
-
-    activityLogListElement.innerHTML = ''; // Clear existing logs
-
-    if (parentTask && parentTask.activityLog && parentTask.activityLog.length > 0) {
-      parentTask.activityLog.forEach(logEntry => {
-        const li = document.createElement('li');
-        li.className = 'text-xs text-gray-600 dark:text-gray-400 py-1';
-        
-        const timestamp = new Date(logEntry.timestamp);
-        const formattedTimestamp = `${timestamp.toLocaleDateString()} ${timestamp.toLocaleTimeString()}`;
-
-        li.innerHTML = `
-          <span class="font-semibold text-gray-700 dark:text-gray-300">${formattedTimestamp}:</span> ${logEntry.details}
-          <!-- <span class="text-gray-500 dark:text-gray-500">(${logEntry.type})</span> -->
-        `;
-        activityLogListElement.appendChild(li);
-      });
-    } else if (parentTask) { // Task exists but no logs
-      const li = document.createElement('li');
-      li.className = 'text-xs text-gray-500 dark:text-gray-400 py-1 italic';
-      li.textContent = 'No activity yet for this task.';
-      activityLogListElement.appendChild(li);
-    }
-    // If no parentTask, list remains empty which is fine.
-  }
-
-  /**
-   * Formats file size in bytes to a human-readable string.
-   * @param {number} bytes - The file size in bytes.
-   * @returns {string} Human-readable file size.
-   */
-  _formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  }
-
-  /**
-   * Private helper method to render attachments in the modal.
-   * @param {string} parentTaskId - The ID of the parent task.
-   */
-  _renderAttachments(parentTaskId) {
-    const parentTask = useTaskStore.getState().getTaskById(parentTaskId);
-    const attachmentListElement = document.getElementById('attachment-list');
-
-    if (!attachmentListElement) {
-      console.error('Attachment list element (#attachment-list) not found.');
-      return;
-    }
-
-    attachmentListElement.innerHTML = ''; // Clear existing attachments
-
-    if (parentTask && parentTask.attachments && parentTask.attachments.length > 0) {
-      parentTask.attachments.forEach(attachment => {
-        const li = document.createElement('li');
-        li.className = 'flex items-center justify-between p-1.5 bg-gray-100 dark:bg-gray-700 rounded-md text-xs mb-2'; // Added mb-2 for spacing
-        li.dataset.attachmentId = attachment.id;
-
-        let fileDisplayContainer = document.createElement('div');
-        fileDisplayContainer.className = 'flex items-center flex-grow truncate mr-2'; // Added mr-2 for spacing before download/delete
-
-        // Image Thumbnail
-        if (attachment.fileDataURL && attachment.fileType && attachment.fileType.startsWith('image/')) {
-          const img = document.createElement('img');
-          img.src = attachment.fileDataURL;
-          img.alt = attachment.fileName;
-          img.className = 'max-w-[80px] max-h-14 object-cover mr-2 rounded-sm'; // Tailwind classes for thumbnail
-          fileDisplayContainer.appendChild(img);
-        }
-
-        // Filename
-        const fileNameSpan = document.createElement('span');
-        fileNameSpan.className = 'font-medium text-gray-800 dark:text-gray-200 break-all';
-        fileNameSpan.textContent = attachment.fileName;
-        fileDisplayContainer.appendChild(fileNameSpan);
-
-        // File Type and Size (optional, can be added if needed, kept simple for now)
-        const fileMetaSpan = document.createElement('span');
-        fileMetaSpan.className = 'text-gray-500 dark:text-gray-400 ml-2 text-xs';
-        fileMetaSpan.textContent = `(${attachment.fileType || 'unknown type'}, ${this._formatFileSize(attachment.fileSize || 0)})`;
-        fileDisplayContainer.appendChild(fileMetaSpan);
-
-        li.appendChild(fileDisplayContainer);
-
-        // Controls Container (Download and Delete)
-        const controlsContainer = document.createElement('div');
-        controlsContainer.className = 'flex items-center flex-shrink-0';
-
-        // Download Link
-        if (attachment.fileDataURL) {
-          const downloadLink = document.createElement('a');
-          downloadLink.href = attachment.fileDataURL;
-          downloadLink.download = attachment.fileName;
-          downloadLink.innerHTML = '<i class="fas fa-download text-xs"></i>'; // Using FontAwesome icon
-          downloadLink.className = 'text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-500 mr-2 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600';
-          downloadLink.title = `Download ${attachment.fileName}`; // Tooltip
-          controlsContainer.appendChild(downloadLink);
-        }
-
-        // Delete Button
-        const deleteButton = document.createElement('button');
-        deleteButton.type = 'button';
-        deleteButton.className = 'attachment-delete-btn text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-500 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600';
-        deleteButton.innerHTML = '<i class="fas fa-trash-alt text-xs"></i>';
-        deleteButton.title = `Delete ${attachment.fileName}`; // Tooltip
-        // The event listener for delete will be handled by the modal setup (event delegation on #attachment-list)
-        controlsContainer.appendChild(deleteButton);
-
-        li.appendChild(controlsContainer);
-        attachmentListElement.appendChild(li);
-      });
-    } else if (parentTask) {
-      const li = document.createElement('li');
-      li.className = 'text-xs text-gray-500 dark:text-gray-400 py-1 italic';
-      li.textContent = 'No files attached.';
-      attachmentListElement.appendChild(li);
-    }
   }
 
   /**

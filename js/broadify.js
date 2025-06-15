@@ -298,15 +298,15 @@ class Boardify {
       return;
     }
 
-    // Ctrl+Enter or Cmd+Enter for saving task in modal
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      if (this.uiManager && this.uiManager.taskModal && !this.uiManager.taskModal.classList.contains('hidden') &&
-          this.uiManager.taskModal.contains(document.activeElement)) {
-        this.taskManager.handleTaskFormSubmit();
-        e.preventDefault();
-        return;
-      }
-    }
+    // Ctrl+Enter or Cmd+Enter for saving task in modal - This is now handled by TaskModalComponent
+    // if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    //   if (this.uiManager && this.uiManager.taskModal && !this.uiManager.taskModal.classList.contains('hidden') &&
+    //       this.uiManager.taskModal.contains(document.activeElement)) {
+    //     // this.taskManager.handleTaskFormSubmit(); // Method removed
+    //     e.preventDefault();
+    //     return;
+    //   }
+    // }
 
     if (isGeneralInputFocused) {
       if (e.key === '/' && (targetTagName !== 'input' || e.target.type === 'search') && targetTagName !== 'textarea' && !e.target.isContentEditable) {
