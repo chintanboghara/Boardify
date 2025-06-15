@@ -119,7 +119,7 @@ class UIManager {
     });
 
     const taskLists = document.querySelectorAll('.task-list');
-    dragDropManager.setupDragAndDrop(taskLists, this.taskManager);
+    dragDropManager.setupDragAndDrop(taskLists);
   }
 }
 
