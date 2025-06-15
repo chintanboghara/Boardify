@@ -28,21 +28,5 @@
 
   .horizontal-scrollbar {
     overflow-x: auto;
-    scrollbar-width: thin;
-    scrollbar-color: #888 transparent;
-  }
-
-  .horizontal-scrollbar::-webkit-scrollbar {
-    width: 0;
-    height: 2px;
-  }
-
-  .horizontal-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .horizontal-scrollbar::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
   }
 }

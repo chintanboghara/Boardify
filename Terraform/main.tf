@@ -18,10 +18,17 @@ resource "docker_network" "app_network" {
   driver = "bridge"
 }
 
-# Pull the Docker image from DockerHub
+# Build the Docker image locally
 resource "docker_image" "app_image" {
-  name         = "${var.image_name}:${var.image_tag}"
-  keep_locally = true # Keep the image locally to avoid repeated pulls
+  name = "${var.image_name}:${var.image_tag}" // Name for the locally built image
+  build {
+    context    = "../." // Path to the root of the project
+    dockerfile = "Dockerfile" // Dockerfile is in the root (context)
+    tag        = ["${var.image_name}:${var.image_tag}"] // Tag the built image
+    // Adding platform might be useful for cross-platform consistency if needed, e.g. platform = "linux/amd64"
+    // For now, let's omit it unless issues arise.
+  }
+  keep_locally = true // Keep the built image locally
 }
 
 # Run the Docker container
