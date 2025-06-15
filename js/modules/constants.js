@@ -10,7 +10,7 @@ export const defaultTasks = [
     title: 'Research project requirements',
     description: 'Gather information on project scope and deliverables',
     priority: 'high',
-    dueDate: '2024-09-15', // Changed to a generic future date
+    dueDate: '2025-02-20',
     assignee: 'Alex',
     column: 0,
   },
@@ -19,7 +19,7 @@ export const defaultTasks = [
     title: 'Update documentation',
     description: 'Review and update existing documentation with latest changes',
     priority: 'medium',
-    dueDate: '2024-10-01', // Changed to a generic future date
+    dueDate: '2025-02-22',
     assignee: 'Sam',
     column: 0,
   },
@@ -28,7 +28,7 @@ export const defaultTasks = [
     title: 'Plan team meeting',
     description: 'Prepare agenda and schedule next team sync',
     priority: 'low',
-    // dueDate property removed
+    dueDate: '2025-02-19',
     assignee: 'Jordan',
     column: 0,
   },
@@ -37,7 +37,7 @@ export const defaultTasks = [
     title: 'Design new interface',
     description: 'Create mockups for the new dashboard layout',
     priority: 'high',
-    dueDate: '2024-08-25', // Changed to a generic future date
+    dueDate: '2025-02-18',
     assignee: 'Taylor',
     column: 1,
   },
@@ -46,7 +46,7 @@ export const defaultTasks = [
     title: 'Fix navigation bug',
     description: 'Address issue with dropdown menu not working on mobile',
     priority: 'medium',
-    // dueDate property removed
+    dueDate: '2025-02-19',
     assignee: 'Morgan',
     column: 1,
   },
@@ -55,7 +55,7 @@ export const defaultTasks = [
     title: 'Stakeholder review',
     description: 'Present initial concepts to project stakeholders',
     priority: 'high',
-    dueDate: '2024-08-30', // Changed to a generic future date
+    dueDate: '2025-02-14',
     assignee: 'Jamie',
     column: 2,
   },
