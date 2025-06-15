@@ -663,114 +663,101 @@ class TaskManager {
         const elemBelow = document.elementFromPoint(touch.clientX, touch.clientY);
         const newColumnDomElement = elemBelow?.closest('.task-list');
         const taskId = taskElement.dataset.taskId;
-
         const localDragDropManager = this.dragDropManager;
 
         if (!taskId) {
-            if (localDragDropManager) localDragDropManager.handleDragEnd(taskElement);
-            return;
-        }
-
-        const taskToMoveInitial = useTaskStore.getState().getTaskById(taskId);
-        if (!taskToMoveInitial) {
-            if (localDragDropManager) localDragDropManager.handleDragEnd(taskElement);
-            console.error("Task not found in store for touchend:", taskId);
-            return;
+          if (localDragDropManager) localDragDropManager.handleDragEnd(taskElement);
+          return;
         }
 
         if (newColumnDomElement) {
-            const newColumnIndex = Number.parseInt(newColumnDomElement.dataset.index, 10);
+          const newColumnIndex = Number.parseInt(newColumnDomElement.dataset.index, 10);
+          let allTasks = [...useTaskStore.getState().tasks];
+          const draggedTaskIndex = allTasks.findIndex(t => t.id === taskId);
 
-            const placeholder = newColumnDomElement.querySelector('.task-placeholder');
-            if (placeholder) {
-                newColumnDomElement.insertBefore(taskElement, placeholder);
-            } else {
-                newColumnDomElement.appendChild(taskElement);
+          if (draggedTaskIndex === -1) {
+            console.error("Dragged task not found in store:", taskId);
+            if (localDragDropManager) localDragDropManager.handleDragEnd(taskElement);
+            return;
+          }
+
+          const draggedTaskObject = allTasks.splice(draggedTaskIndex, 1)[0];
+          draggedTaskObject.column = newColumnIndex;
+
+          // Place task element in new DOM column
+          const placeholder = newColumnDomElement.querySelector('.task-placeholder');
+          if (placeholder) {
+            newColumnDomElement.insertBefore(taskElement, placeholder);
+          } else {
+            newColumnDomElement.appendChild(taskElement);
+          }
+
+          const finalTasks = [];
+          const tasksByColumn = new Map();
+          for (const task of allTasks) {
+            if (!tasksByColumn.has(task.column)) {
+              tasksByColumn.set(task.column, []);
             }
-            // Placeholder removal is handled by localDragDropManager.handleDragEnd
+            tasksByColumn.get(task.column).push(task);
+          }
 
-            let currentTasks = [...useTaskStore.getState().tasks];
-            const taskToMoveIndexInCurrentTasks = currentTasks.findIndex(t => t.id === taskId);
-            const taskDataForStore = { ...taskToMoveInitial, column: newColumnIndex };
-
-            if (taskToMoveIndexInCurrentTasks !== -1) {
-                currentTasks.splice(taskToMoveIndexInCurrentTasks, 1);
-            } else {
-                currentTasks = currentTasks.filter(t => t.id !== taskId);
-            }
-
-            const tasksInNewColumnDomOrder = Array.from(newColumnDomElement.querySelectorAll('.task:not(.task-placeholder)'))
-                                              .map(el => el.dataset.taskId);
-
-            const positionInDomColumn = tasksInNewColumnDomOrder.indexOf(taskId);
-            let finalInsertIndexInStoreArray = -1;
-
-            if (positionInDomColumn === -1) {
-                console.error("Consistency error: Dragged task not found in its target DOM column after move.");
-                let lastIndexOfColumn = -1;
-                for(let i = currentTasks.length - 1; i >= 0; i--) {
-                    if (currentTasks[i].column === newColumnIndex) {
-                        lastIndexOfColumn = i;
-                        break;
-                    }
-                }
-                finalInsertIndexInStoreArray = lastIndexOfColumn === -1 ? currentTasks.length : lastIndexOfColumn + 1;
-            } else if (tasksInNewColumnDomOrder.length === 1) {
-                let targetIdx = 0;
-                for (let i = 0; i < currentTasks.length; i++) {
-                    if (currentTasks[i].column >= newColumnIndex) {
-                        targetIdx = i;
-                        break;
-                    }
-                    targetIdx = i + 1;
-                }
-                finalInsertIndexInStoreArray = targetIdx;
-            } else if (positionInDomColumn === tasksInNewColumnDomOrder.length - 1) {
-                let lastExistingTaskOfColumn = -1;
-                for (let i = currentTasks.length - 1; i >= 0; i--) {
-                    if (currentTasks[i].column === newColumnIndex) {
-                        lastExistingTaskOfColumn = i;
-                        break;
-                    }
-                }
-                if (lastExistingTaskOfColumn !== -1) {
-                    finalInsertIndexInStoreArray = lastExistingTaskOfColumn + 1;
+          const numBoards = this.boardManager.boards.length;
+          for (let i = 0; i < numBoards; i++) {
+            if (i === newColumnIndex) {
+              const tasksInDomOrder = Array.from(newColumnDomElement.querySelectorAll('.task:not(.task-placeholder)'))
+                                        .map(el => el.dataset.taskId);
+              for (const domTaskId of tasksInDomOrder) {
+                if (domTaskId === draggedTaskObject.id) {
+                  finalTasks.push(draggedTaskObject);
                 } else {
-                    let targetIdx = 0;
-                    for (let i = 0; i < currentTasks.length; i++) {
-                        if (currentTasks[i].column >= newColumnIndex) {
-                            targetIdx = i;
-                            break;
-                        }
-                        targetIdx = i + 1;
-                    }
-                    finalInsertIndexInStoreArray = targetIdx;
-                }
-            } else {
-                const nextTaskInDomId = tasksInNewColumnDomOrder[positionInDomColumn + 1];
-                finalInsertIndexInStoreArray = currentTasks.findIndex(t => t.id === nextTaskInDomId);
-                if (finalInsertIndexInStoreArray === -1) {
-                    let lastExistingTaskOfColumn = -1;
-                    for (let i = currentTasks.length - 1; i >= 0; i--) {
-                        if (currentTasks[i].column === newColumnIndex) {
-                            lastExistingTaskOfColumn = i;
-                            break;
-                        }
-                    }
-                    if (lastExistingTaskOfColumn !== -1) {
-                        finalInsertIndexInStoreArray = lastExistingTaskOfColumn + 1;
+                  const columnTasks = tasksByColumn.get(i);
+                  if (columnTasks) {
+                    const taskIndex = columnTasks.findIndex(t => t.id === domTaskId);
+                    if (taskIndex !== -1) {
+                      finalTasks.push(columnTasks.splice(taskIndex, 1)[0]);
                     } else {
-                        finalInsertIndexInStoreArray = currentTasks.length;
+                       // Task might have been moved from this column already or belongs to another.
+                       // Check allTasks (which is now tasksByColumn effectively)
+                        let foundTask = null;
+                        for (const [colIdx, tasksInCol] of tasksByColumn.entries()) {
+                            const idx = tasksInCol.findIndex(t => t.id === domTaskId);
+                            if (idx !== -1) {
+                                foundTask = tasksInCol.splice(idx, 1)[0];
+                                break;
+                            }
+                        }
+                        if (foundTask) {
+                            finalTasks.push(foundTask);
+                        } else {
+                            console.warn(`Task ${domTaskId} from DOM order not found in remaining tasks for column ${i} or other columns.`);
+                        }
                     }
+                  }
                 }
+              }
+              // Add any remaining tasks that were in this column but not in DOM order (should not happen if DOM is source of truth for order)
+              if (tasksByColumn.has(i)) {
+                tasksByColumn.get(i).forEach(task => {
+                    console.warn(`Task ${task.id} was in column ${i} but not in DOM order, appending.`);
+                    finalTasks.push(task);
+                });
+                tasksByColumn.delete(i);
+              }
+            } else {
+              if (tasksByColumn.has(i)) {
+                finalTasks.push(...tasksByColumn.get(i));
+                tasksByColumn.delete(i);
+              }
             }
+          }
 
-            if (finalInsertIndexInStoreArray === -1 ) {
-                finalInsertIndexInStoreArray = currentTasks.length;
-            }
+          // Append tasks from any columns not iterated (e.g., if numBoards was wrong or tasks have invalid column indices)
+          for (const [columnIndex, tasks] of tasksByColumn.entries()) {
+            console.warn(`Tasks found in unexpected column ${columnIndex}, appending them:`, tasks);
+            finalTasks.push(...tasks);
+          }
 
-            currentTasks.splice(finalInsertIndexInStoreArray, 0, taskDataForStore);
-            useTaskStore.getState().setTasksOrder(currentTasks);
+          useTaskStore.getState().setTasksOrder(finalTasks);
         }
 
         if (localDragDropManager) localDragDropManager.handleDragEnd(taskElement);
