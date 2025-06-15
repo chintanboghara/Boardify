@@ -4,8 +4,6 @@ A simple and intuitive Kanban board to manage your tasks efficiently.
 
 Boardify is a lightweight and efficient Kanban board designed to help you organize tasks effortlessly. Explore the codebase to discover more.
 
----
-
 ## Features
 
 - Create Tasks  
@@ -19,15 +17,11 @@ Boardify is a lightweight and efficient Kanban board designed to help you organi
 - Local Storage Persistence  
 - Fully Responsive Design  
 
----
-
 ## Tech Stack
 
 - [HTML5](https://developer.mozilla.org/en-US/docs/Web/HTML) – structuring  
 - [Tailwind CSS](https://tailwindcss.com/) – utility-first styling  
 - [JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript) – functionality  
-
----
 
 ## Local Development
 
