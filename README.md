@@ -202,7 +202,7 @@ This project includes Docker configuration for both production and development.
 2.  **Run the Docker Container:**
     After the image is successfully built, run:
     ```bash
-    docker run -d -p 8080:80 boardify
+    docker run -d -p 80:80 boardify:latest
     ```
     -   `-d`: Runs the container in detached mode (in the background).
     -   `-p 8080:80`: Maps port 8080 on your host machine to port 80 inside the container (where Nginx is listening).
