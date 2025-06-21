@@ -1,0 +1,5 @@
+{
+  "name": "Boardify",
+  "description": "A simple, intuitive, and fully responsive Kanban board to manage tasks efficiently. All data is stored locally in the browser.",
+  "requestFramePermissions": []
+}
